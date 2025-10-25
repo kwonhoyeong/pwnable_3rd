@@ -1,4 +1,4 @@
-# npm 공급망 CVE/EPSS 대응 파이프라인
+# npm 공급망 CVE/EPSS 대응 파이프라인 (NPM Supply Chain CVE/EPSS Response Pipeline)
 
 ## Repository Layout
 ```
@@ -12,7 +12,8 @@
   ├── analyzer/
   ├── query_api/
   ├── web_frontend/
-  └── .env
+  ├── demo/
+  └── .env.example
 ```
 
 ## Requirements

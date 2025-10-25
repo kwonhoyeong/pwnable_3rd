@@ -29,7 +29,8 @@ export const QueryProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const search = async ({ package: pkg, cve_id }: { package?: string; cve_id?: string }) => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const response = await axios.get('/api/v1/query', { params: { package: pkg, cve_id } });
+      const baseUrl = import.meta.env.VITE_QUERY_API_BASE_URL || '/api/v1';
+      const response = await axios.get(`${baseUrl}/query`, { params: { package: pkg, cve_id } });
       setState({
         loading: false,
         error: null,

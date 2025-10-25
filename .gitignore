@@ -1,7 +1,43 @@
+# Environment
 .env
+.env.local
+
+# Python
 *.pyc
+*.pyo
+*.pyd
 __pycache__/
+.Python
+*.so
+*.egg-info/
+dist/
+build/
+
+# Node
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Docker
+.docker/
+
+# Logs
 *.log
+
+# Build outputs
+*.whl
+*.tar.gz
