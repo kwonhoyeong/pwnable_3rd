@@ -1,5 +1,4 @@
-# npm 패키지 대상 CVE/EPSS 위협 평가 에이전트 (npm package CVE/EPSS Threat Evaluation Agents)
-
+# npm 패키지 대상 CVE/EPSS 위협 평가 에이전트
 ## 개요(Overview)
 - 목적(Purpose): npm 패키지 공급망(Supply chain) 보안 위협 탐지 및 대응 권고 자동화.
 - 구성(Modules): MappingCollector, EPSSFetcher, ThreatAgent, Analyzer, QueryAPI, WebFrontend, CommonLib.
