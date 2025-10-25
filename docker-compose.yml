@@ -1,0 +1,184 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: nt-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: "${NT_POSTGRES_USER:-ntuser}"
+      POSTGRES_PASSWORD: "${NT_POSTGRES_PASSWORD:-ntpassword}"
+      POSTGRES_DB: "${NT_POSTGRES_DB:-threatdb}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NT_POSTGRES_USER:-ntuser} -d ${NT_POSTGRES_DB:-threatdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nt-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: nt-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nt-network
+
+  mapping-collector:
+    build:
+      context: .
+      dockerfile: mapping_collector/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      NT_POSTGRES_DSN: "postgresql+asyncpg://${NT_POSTGRES_USER:-ntuser}:${NT_POSTGRES_PASSWORD:-ntpassword}@postgres:5432/${NT_POSTGRES_DB:-threatdb}"
+      NT_REDIS_URL: "${NT_REDIS_URL:-redis://redis:6379/0}"
+      NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+    volumes:
+      - ./common_lib:/app/common_lib
+      - ./mapping_collector:/app/mapping_collector
+    command: >-
+      uvicorn mapping_collector.app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nt-network
+
+  epss-fetcher:
+    build:
+      context: .
+      dockerfile: epss_fetcher/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      NT_POSTGRES_DSN: "postgresql+asyncpg://${NT_POSTGRES_USER:-ntuser}:${NT_POSTGRES_PASSWORD:-ntpassword}@postgres:5432/${NT_POSTGRES_DB:-threatdb}"
+      NT_REDIS_URL: "${NT_REDIS_URL:-redis://redis:6379/0}"
+      NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+    volumes:
+      - ./common_lib:/app/common_lib
+      - ./epss_fetcher:/app/epss_fetcher
+    command: >-
+      uvicorn epss_fetcher.app.main:app --host 0.0.0.0 --port 8001 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nt-network
+
+  threat-agent:
+    build:
+      context: .
+      dockerfile: threat_agent/Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      NT_POSTGRES_DSN: "postgresql+asyncpg://${NT_POSTGRES_USER:-ntuser}:${NT_POSTGRES_PASSWORD:-ntpassword}@postgres:5432/${NT_POSTGRES_DB:-threatdb}"
+      NT_REDIS_URL: "${NT_REDIS_URL:-redis://redis:6379/0}"
+      NT_PERPLEXITY_API_KEY: "${NT_PERPLEXITY_API_KEY:-}"
+      NT_CLAUDE_API_KEY: "${NT_CLAUDE_API_KEY:-}"
+      NT_GPT5_API_KEY: "${NT_GPT5_API_KEY:-}"
+      NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+    volumes:
+      - ./common_lib:/app/common_lib
+      - ./threat_agent:/app/threat_agent
+    command: >-
+      uvicorn threat_agent.app.main:app --host 0.0.0.0 --port 8002 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nt-network
+
+  analyzer:
+    build:
+      context: .
+      dockerfile: analyzer/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      NT_POSTGRES_DSN: "postgresql+asyncpg://${NT_POSTGRES_USER:-ntuser}:${NT_POSTGRES_PASSWORD:-ntpassword}@postgres:5432/${NT_POSTGRES_DB:-threatdb}"
+      NT_REDIS_URL: "${NT_REDIS_URL:-redis://redis:6379/0}"
+      NT_CLAUDE_API_KEY: "${NT_CLAUDE_API_KEY:-}"
+      NT_GPT5_API_KEY: "${NT_GPT5_API_KEY:-}"
+      NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+    volumes:
+      - ./common_lib:/app/common_lib
+      - ./analyzer:/app/analyzer
+    command: >-
+      uvicorn analyzer.app.main:app --host 0.0.0.0 --port 8003 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nt-network
+
+  query-api:
+    build:
+      context: .
+      dockerfile: query_api/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      NT_POSTGRES_DSN: "postgresql+asyncpg://${NT_POSTGRES_USER:-ntuser}:${NT_POSTGRES_PASSWORD:-ntpassword}@postgres:5432/${NT_POSTGRES_DB:-threatdb}"
+      NT_REDIS_URL: "${NT_REDIS_URL:-redis://redis:6379/0}"
+      NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+    volumes:
+      - ./common_lib:/app/common_lib
+      - ./query_api:/app/query_api
+    command: >-
+      uvicorn query_api.app.main:app --host 0.0.0.0 --port 8004 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      analyzer:
+        condition: service_started
+    networks:
+      - nt-network
+
+  web-frontend:
+    build:
+      context: web_frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_QUERY_API_BASE_URL: http://localhost:8004/api/v1
+    volumes:
+      - ./web_frontend:/app
+    command: npm run dev -- --host 0.0.0.0
+    depends_on:
+      query-api:
+        condition: service_started
+    networks:
+      - nt-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  nt-network:
+    driver: bridge
