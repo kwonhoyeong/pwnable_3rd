@@ -1,0 +1,28 @@
+@import './_tokens';
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell__header {
+  padding: $space-lg;
+  background-color: $color-surface;
+  box-shadow: $shadow-card;
+}
+
+.app-shell__main {
+  flex: 1;
+  padding: $space-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+}
+
+@media (max-width: 768px) {
+  .app-shell__main {
+    padding: $space-md;
+  }
+}
+
