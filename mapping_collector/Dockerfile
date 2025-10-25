@@ -1,13 +1,15 @@
-# MappingCollector Dockerfile
+# MappingCollector 개발용 Dockerfile(Development Dockerfile)
 FROM python:3.11-slim
 
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
-COPY common_lib /app/common_lib
-COPY mapping_collector /app/mapping_collector
+# 의존성 선행 설치(Preinstall shared dependencies)
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-RUN pip install --no-cache-dir fastapi uvicorn[standard] httpx sqlalchemy asyncpg aioredis
+# 소스코드는 docker-compose 볼륨으로 마운트됩니다(Source code is mounted via docker-compose volume)
 
 CMD ["uvicorn", "mapping_collector.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
