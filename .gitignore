@@ -32,9 +32,6 @@ yarn-error.log*
 Thumbs.db
 Desktop.ini
 
-# Docker
-.docker/
-
 # Logs
 *.log
 
