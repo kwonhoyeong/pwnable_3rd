@@ -1,4 +1,4 @@
-"""EPSS API 호출 서비스(Service for EPSS API calls)."""
+"""EPSS 점수 수집 서비스 모듈(EPSS score collection service module)."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -14,9 +14,9 @@ logger = get_logger(__name__)
 class EPSSService:
     """EPSS 점수 조회 서비스(Service fetching EPSS scores)."""
 
-    def __init__(self, base_url: str = "https://epss.cyentia.com/api") -> None:
-        self._base_url = base_url
-        self._client = httpx.AsyncClient(timeout=15.0)
+    def __init__(self, base_url: str = "https://epss.cyentia.com/api", timeout: float = 15.0) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._timeout = timeout
 
     async def fetch_score(self, cve_id: str) -> Dict[str, Any]:
         """EPSS 점수 조회(Fetch EPSS score)."""
@@ -24,9 +24,10 @@ class EPSSService:
         retries = 3
         for attempt in range(1, retries + 1):
             try:
-                response = await self._client.get(f"{self._base_url}/epss", params={"cve": cve_id})
-                response.raise_for_status()
-                data = response.json()
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    response = await client.get(f"{self._base_url}/epss", params={"cve": cve_id})
+                    response.raise_for_status()
+                    data = response.json()
                 return {
                     "cve_id": cve_id,
                     "epss_score": float(data.get("data", [{}])[0].get("epss", 0.0)),

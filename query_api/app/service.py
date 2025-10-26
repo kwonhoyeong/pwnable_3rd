@@ -23,8 +23,13 @@ class QueryService:
         """패키지 또는 CVE 기준으로 조회(Query by package or CVE)."""
 
         cache_key = self._build_cache_key(package, cve_id)
-        redis = await get_redis()
-        cached = await redis.get(cache_key)
+        redis = None
+        try:
+            redis = await get_redis()
+            cached = await redis.get(cache_key)
+        except Exception as exc:  # pragma: no cover - cache fallback
+            cached = None
+            logger.warning("Redis unavailable, bypassing cache", exc_info=exc)
         if cached:
             logger.debug("Cache hit for %s", cache_key)
             return QueryResponse(**json.loads(cached))
@@ -46,7 +51,11 @@ class QueryService:
         else:
             raise ValueError("Either package or cve_id must be provided")
 
-        await redis.set(cache_key, response.json(), ex=self._cache_ttl)
+        if redis is not None:
+            try:
+                await redis.set(cache_key, response.json(), ex=self._cache_ttl)
+            except Exception as exc:  # pragma: no cover - cache fallback
+                logger.warning("Failed to populate cache for %s", cache_key, exc_info=exc)
         return response
 
     @staticmethod

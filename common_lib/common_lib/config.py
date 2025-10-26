@@ -15,10 +15,10 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", description="실행 환경(Runtime environment)")
 
     postgres_dsn: str = Field(
-        default="postgresql+asyncpg://user:password@db:5432/threatdb",
+        default="postgresql+asyncpg://user:password@localhost:5432/threatdb",
         description="PostgreSQL 연결 DSN(PostgreSQL connection DSN)",
     )
-    redis_url: str = Field(default="redis://redis:6379/0", description="Redis 접속 URL(Redis connection URL)")
+    redis_url: str = Field(default="redis://localhost:6379/0", description="Redis 접속 URL(Redis connection URL)")
     kafka_bootstrap_servers: str = Field(
         default="kafka:9092",
         description="Kafka 부트스트랩 서버(Kafka bootstrap servers)",

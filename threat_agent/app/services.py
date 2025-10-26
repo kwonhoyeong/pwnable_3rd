@@ -1,4 +1,4 @@
-"""ThreatAgent 서비스 로직(ThreatAgent service logic)."""
+"""ThreatAgent 서비스 계층 구현(ThreatAgent service layer implementations)."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -72,8 +72,14 @@ class ThreatAggregationService:
         """검색과 요약을 실행하여 결과 반환(Execute search and summary)."""
 
         cases = await self._search.search_cases(payload)
+        if not cases:
+            logger.warning("No threat cases found for %s", payload.cve_id)
+            return ThreatResponse(cve_id=payload.cve_id, package=payload.package, version_range=payload.version_range, cases=[])
+
         summary = await self._summary.summarize(payload, cases)
-        enriched_cases = [case.copy(update={"summary": f"{case.summary}\n\n요약(Summary): {summary}"}) for case in cases]
+        enriched_cases = [
+            case.copy(update={"summary": f"{case.summary}\n\n요약(Summary): {summary}"}) for case in cases
+        ]
         return ThreatResponse(
             cve_id=payload.cve_id,
             package=payload.package,

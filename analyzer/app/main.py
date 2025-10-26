@@ -1,4 +1,4 @@
-"""Analyzer FastAPI 애플리케이션(Analyzer FastAPI application)."""
+"""Analyzer FastAPI 애플리케이션 모듈(Analyzer FastAPI application module)."""
 from __future__ import annotations
 
 from fastapi import Depends, FastAPI, HTTPException

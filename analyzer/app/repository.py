@@ -1,4 +1,4 @@
-"""Analyzer 데이터 저장소(Analyzer data repository)."""
+"""Analyzer 데이터 접근 계층(Analyzer data access layer)."""
 from __future__ import annotations
 
 from datetime import datetime
