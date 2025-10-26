@@ -22,11 +22,21 @@ class QueryRepository:
 
         query = text(
             """
-            SELECT ac.cve_id, es.epss_score, ar.risk_level, ar.analysis_summary, ar.recommendations
-            FROM package_cve_mapping ac
-            LEFT JOIN epss_scores es ON ac.cve_ids @> ARRAY[es.cve_id]
-            LEFT JOIN analysis_results ar ON ar.cve_id = es.cve_id
-            WHERE ac.package = :package
+            WITH expanded AS (
+                SELECT package, version_range, UNNEST(cve_ids) AS cve_id
+                FROM package_cve_mapping
+                WHERE package = :package
+            )
+            SELECT exp.cve_id,
+                   COALESCE(es.epss_score, 0.0) AS epss_score,
+                   cs.cvss_score,
+                   ar.risk_level,
+                   ar.analysis_summary,
+                   ar.recommendations
+            FROM expanded exp
+            LEFT JOIN epss_scores es ON es.cve_id = exp.cve_id
+            LEFT JOIN cvss_scores cs ON cs.cve_id = exp.cve_id
+            LEFT JOIN analysis_results ar ON ar.cve_id = exp.cve_id
             """
         )
         result = await self._session.execute(query, {"package": package})
@@ -35,6 +45,7 @@ class QueryRepository:
             {
                 "cve_id": row.cve_id,
                 "epss_score": row.epss_score or 0.0,
+                "cvss_score": row.cvss_score,
                 "risk_level": row.risk_level or "Unknown",
                 "analysis_summary": row.analysis_summary or "",
                 "recommendations": row.recommendations or [],
@@ -47,9 +58,15 @@ class QueryRepository:
 
         query = text(
             """
-            SELECT ar.cve_id, es.epss_score, ar.risk_level, ar.analysis_summary, ar.recommendations
+            SELECT ar.cve_id,
+                   es.epss_score,
+                   cs.cvss_score,
+                   ar.risk_level,
+                   ar.analysis_summary,
+                   ar.recommendations
             FROM analysis_results ar
             LEFT JOIN epss_scores es ON es.cve_id = ar.cve_id
+            LEFT JOIN cvss_scores cs ON cs.cve_id = ar.cve_id
             WHERE ar.cve_id = :cve_id
             """
         )
@@ -59,6 +76,7 @@ class QueryRepository:
             {
                 "cve_id": row.cve_id,
                 "epss_score": row.epss_score or 0.0,
+                "cvss_score": row.cvss_score,
                 "risk_level": row.risk_level or "Unknown",
                 "analysis_summary": row.analysis_summary or "",
                 "recommendations": row.recommendations or [],

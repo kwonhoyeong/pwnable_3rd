@@ -16,12 +16,12 @@ class RiskRuleEngine:
     """규칙 기반 위험 산정 엔진(Rule-based risk scoring engine)."""
 
     @staticmethod
-    def classify(epss_score: float, case_count: int) -> str:
-        """EPSS 및 사례 수를 바탕으로 위험 등급 산정(Classify risk level)."""
+    def classify(epss_score: float, cvss_score: float, case_count: int) -> str:
+        """EPSS, CVSS, 사례 수를 바탕으로 위험 등급 산정(Classify risk level)."""
 
-        if epss_score >= 0.7 or case_count >= 3:
+        if epss_score >= 0.7 or cvss_score >= 8.0 or case_count >= 3:
             return "High"
-        if epss_score >= 0.4 or case_count == 2:
+        if epss_score >= 0.4 or cvss_score >= 6.0 or case_count == 2:
             return "Medium"
         return "Low"
 
@@ -38,7 +38,7 @@ class RecommendationGenerator:
         prompt = (
             "다음 CVE에 대해 보안 대응 권고(Security recommendations) 목록을 한국어와 영어 키워드로 작성: "
             f"CVE={payload.cve_id}, 패키지={payload.package}, 버전={payload.version_range}, "
-            f"위험도(Risk level)={risk_level}. 사례 수={len(payload.cases)}"
+            f"위험도(Risk level)={risk_level}, CVSS={payload.cvss_score}. 사례 수={len(payload.cases)}"
         )
         response = await self._client.chat(prompt)
         return [line.strip() for line in response.split("\n") if line.strip()]
@@ -55,12 +55,15 @@ class SummaryGenerator:
 
         prompt = (
             "CVE {cve_id} for package {package} ({version}) has risk level {risk_level}. "
+            "CVSS base score {cvss} and EPSS score {epss}. "
             "Summarize key attack themes and mitigation in Korean with English keywords."
         ).format(
             cve_id=payload.cve_id,
             package=payload.package,
             version=payload.version_range,
             risk_level=risk_level,
+            cvss=payload.cvss_score,
+            epss=payload.epss_score,
         )
         return await self._client.chat(prompt)
 
@@ -76,7 +79,7 @@ class AnalyzerService:
     async def analyze(self, payload: AnalyzerInput) -> AnalyzerOutput:
         """위험 평가와 권고 생성 실행(Perform risk evaluation and recommendation generation)."""
 
-        risk_level = self._rules.classify(payload.epss_score, len(payload.cases))
+        risk_level = self._rules.classify(payload.epss_score, payload.cvss_score, len(payload.cases))
         recommendations = await self._recommendation.generate(payload, risk_level)
         analysis_summary = await self._summary.generate_summary(payload, risk_level)
         return AnalyzerOutput(

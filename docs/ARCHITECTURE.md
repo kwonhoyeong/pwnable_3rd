@@ -2,11 +2,14 @@
 
 ## System Overview
 - 목적(Purpose): npm 패키지 공급망 공격 위협을 자동 평가하여 대응 가이드를 생성.
-- 구성요소(Components): MappingCollector, EPSSFetcher, ThreatAgent, Analyzer, QueryAPI, WebFrontend, CommonLib.
+- 구성요소(Components): MappingCollector, CVSSFetcher, EPSSFetcher, ThreatAgent, Analyzer, QueryAPI, WebFrontend, CommonLib.
 
 ## High-Level Diagram
 ```
 [Scheduler] -> MappingCollector ---> PostgreSQL (package_cve_mapping)
+                                     |
+                                     v
+                               CVSSFetcher --> PostgreSQL (cvss_scores)
                                      |
                                      v
                                EPSSFetcher --> PostgreSQL (epss_scores)
@@ -23,17 +26,19 @@
 
 ## Data Flow
 1. MappingCollector 모듈이 npm 패키지/버전 범위 입력을 받아 관련 CVE ID 목록을 수집하고 저장.
-2. EPSSFetcher 모듈이 CVE ID를 받아 EPSS 공식 API에서 점수를 조회 후 정규화하여 저장.
-3. ThreatAgent 모듈이 Perplexity(검색)와 Claude(요약)를 이용하여 공격 사례를 수집하고 중복 제거 후 저장.
-4. Analyzer 모듈이 CVE, EPSS, 사례 데이터를 결합하여 위험 등급과 대응 권고를 산출.
-5. QueryAPI 모듈이 PostgreSQL과 Redis 캐시를 활용해 통합 정보를 제공.
-6. WebFrontend가 QueryAPI를 호출해 결과를 사용자에게 시각화.
+2. CVSSFetcher 모듈이 CVE ID를 받아 CVSS v3 기초 점수를 조회 후 저장.
+3. EPSSFetcher 모듈이 CVE ID를 받아 EPSS 공식 API에서 점수를 조회 후 정규화하여 저장.
+4. ThreatAgent 모듈이 Perplexity(검색)와 Claude(요약)를 이용하여 공격 사례를 수집하고 중복 제거 후 저장.
+5. Analyzer 모듈이 CVE, CVSS, EPSS, 사례 데이터를 결합하여 위험 등급과 대응 권고를 산출.
+6. QueryAPI 모듈이 PostgreSQL과 Redis 캐시를 활용해 통합 정보를 제공하고 위협 우선순위를 계산.
+7. WebFrontend가 QueryAPI를 호출해 우선순위 기반 결과를 사용자에게 시각화.
 
 ## Database Schema Summary
-- `package_cve_mapping(id, package, version_range, cve_id, collected_at)`
-- `epss_scores(id, cve_id, epss_score, percentile, collected_at)`
+- `package_cve_mapping(id, package, version_range, cve_ids, created_at, updated_at)`
+- `cvss_scores(id, cve_id, cvss_score, vector, collected_at, created_at)`
+- `epss_scores(id, cve_id, epss_score, collected_at)`
 - `threat_cases(id, cve_id, package, source, title, summary, collected_at)`
-- `analysis_results(id, cve_id, package, risk_level, recommendations, analysis_summary, generated_at)`
+- `analysis_results(id, cve_id, risk_level, recommendations, analysis_summary, generated_at, created_at)`
 
 ## AI Responsibilities
 - PerplexityClient: 웹 검색 기반 자료 수집(Web search ingestion).

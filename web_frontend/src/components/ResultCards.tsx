@@ -26,13 +26,18 @@ export const ResultCards: React.FC = () => {
             onClick={() => setActiveIndex(index)}
           >
             <h3>{item.cve_id}</h3>
+            <p className="result-card__priority">우선순위(Priority): {item.priority_label}</p>
             <p className="result-card__risk">위험도(Risk): {item.risk_level}</p>
             <p className="result-card__epss">EPSS: {item.epss_score.toFixed(2)}</p>
+            {typeof item.cvss_score === 'number' && (
+              <p className="result-card__cvss">CVSS: {item.cvss_score.toFixed(1)}</p>
+            )}
           </article>
         ))}
       </div>
       <div className="result-grid__detail">
         <h2>{active.cve_id}</h2>
+        <p className="result-detail__priority">우선순위(Priority): {active.priority_label}</p>
         <p>{active.analysis_summary}</p>
         <h4>권고 사항(Recommendations)</h4>
         <ul>

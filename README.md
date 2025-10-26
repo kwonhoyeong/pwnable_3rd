@@ -5,6 +5,7 @@
   ├── main.py
   ├── common_lib/
   ├── mapping_collector/
+  ├── cvss_fetcher/
   ├── epss_fetcher/
   ├── threat_agent/
   ├── analyzer/
@@ -34,11 +35,11 @@ python main.py --package lodash
 
 ## Pipeline at a Glance
 1. MappingCollector → CVE 수집(Collect CVEs)
-2. EPSSFetcher → 위험 점수 조회(Get EPSS scores)
-3. ThreatAgent → 공격 사례 탐색(Search threat cases)
-4. ThreatAgent → Claude 요약(Summarize findings)
+2. CVSSFetcher → CVSS 기초 점수 수집(Get CVSS base scores)
+3. EPSSFetcher → 위험 점수 조회(Get EPSS scores)
+4. ThreatAgent → 공격 사례 탐색 및 요약(Search & summarize threat cases)
 5. Analyzer → 위험 등급/권고 산출(Calculate risk & advice)
-6. QueryAPI/WebFrontend → 결과 제공(Present results)
+6. QueryAPI/WebFrontend → 우선순위 결과 제공(Present prioritized results)
 
 ## Documentation
 - 더 자세한 내용은 `docs/ARCHITECTURE.md`, `docs/API.md` 참고

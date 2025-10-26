@@ -1,7 +1,7 @@
 # QueryAPI 모듈 가이드 (QueryAPI Module Guide)
 
 ## 개요(Overview)
-- 역할(Role): 패키지명 또는 CVE ID를 기준으로 여러 데이터 소스(매핑, EPSS, 분석 결과)를 통합 조회합니다.
+- 역할(Role): 패키지명 또는 CVE ID를 기준으로 여러 데이터 소스(매핑, CVSS, EPSS, 분석 결과)를 통합 조회합니다.
 - 실행 형태(Runtime): FastAPI 기반 REST API + Redis 캐싱.
 
 ## 사전 준비(Prerequisites)
@@ -37,7 +37,10 @@ python -m uvicorn query_api.app.main:app --reload
       {
         "cve_id": "CVE-2023-1234",
         "epss_score": 0.87,
+        "cvss_score": 9.8,
         "risk_level": "High",
+        "priority_score": 345.0,
+        "priority_label": "P1",
         "analysis_summary": "…",
         "recommendations": [
           "Apply the latest patch"

@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import List, Optional
 
 from common_lib.cache import get_redis
 from common_lib.logger import get_logger
 
-from .models import QueryResponse
+from .models import CVEDetail, QueryResponse
 from .repository import QueryRepository
 
 logger = get_logger(__name__)
@@ -30,11 +30,19 @@ class QueryService:
             return QueryResponse(**json.loads(cached))
 
         if package:
-            results = await repository.find_by_package(package)
-            response = QueryResponse(package=package, cve_list=results)
+            raw_results = await repository.find_by_package(package)
+            results = self._prioritize(raw_results)
+            response = QueryResponse(
+                package=package,
+                cve_list=[CVEDetail(**item) for item in results],
+            )
         elif cve_id:
-            results = await repository.find_by_cve(cve_id)
-            response = QueryResponse(cve_id=cve_id, cve_list=results)
+            raw_results = await repository.find_by_cve(cve_id)
+            results = self._prioritize(raw_results)
+            response = QueryResponse(
+                cve_id=cve_id,
+                cve_list=[CVEDetail(**item) for item in results],
+            )
         else:
             raise ValueError("Either package or cve_id must be provided")
 
@@ -50,4 +58,45 @@ class QueryService:
         if cve_id:
             return f"query:cve:{cve_id}"
         raise ValueError("Invalid cache key parameters")
+
+    @staticmethod
+    def _prioritize(results: List[dict[str, object]]) -> List[dict[str, object]]:
+        """위협 우선순위를 계산하고 정렬(Calculate and sort threat priority)."""
+
+        risk_weights = {
+            "Critical": 4,
+            "High": 3,
+            "Medium": 2,
+            "Low": 1,
+            "Unknown": 0,
+        }
+
+        prioritized: List[dict[str, object]] = []
+        for item in results:
+            risk_level = str(item.get("risk_level", "Unknown"))
+            risk_weight = risk_weights.get(risk_level, 0)
+            epss_score = float(item.get("epss_score", 0.0))
+            cvss_score = item.get("cvss_score")
+            cvss_value = float(cvss_score) if cvss_score is not None else 0.0
+
+            priority_score = (risk_weight * 100) + (cvss_value * 5) + (epss_score * 10)
+
+            if risk_weight >= 3 or cvss_value >= 8.0 or epss_score >= 0.7:
+                priority_label = "P1"
+            elif risk_weight >= 2 or cvss_value >= 6.0 or epss_score >= 0.4:
+                priority_label = "P2"
+            else:
+                priority_label = "P3"
+
+            prioritized.append(
+                {
+                    **item,
+                    "cvss_score": cvss_score,
+                    "priority_score": priority_score,
+                    "priority_label": priority_label,
+                }
+            )
+
+        prioritized.sort(key=lambda entry: entry["priority_score"], reverse=True)
+        return prioritized
 

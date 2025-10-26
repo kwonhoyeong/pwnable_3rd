@@ -20,6 +20,17 @@
   transition: transform 0.2s ease;
 }
 
+.result-card__priority {
+  font-weight: 600;
+  color: $color-accent;
+}
+
+.result-detail__priority {
+  font-weight: 600;
+  margin-bottom: $space-sm;
+  color: $color-accent-dark;
+}
+
 .result-card--active {
   border: 1px solid $color-accent;
   transform: translateY(-4px);

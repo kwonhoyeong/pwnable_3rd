@@ -14,21 +14,21 @@ class MappingService:
     """CVE 매핑 수집 서비스(Service for collecting CVE mappings)."""
 
     def __init__(self, cve_feed_url: str = "https://example.com/cve-feed") -> None:
+        self._client = httpx.AsyncClient(timeout=30.0)
         self._cve_feed_url = cve_feed_url
-        self._timeout = 30.0
 
     async def fetch_cves(self, package: str, version_range: str) -> List[str]:
         """외부 소스에서 CVE 목록 조회(Fetch CVE list from external source)."""
 
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.get(
-                    self._cve_feed_url,
-                    params={"package": package, "version_range": version_range},
-                )
-                response.raise_for_status()
-                data = response.json()
+            response = await self._client.get(
+                self._cve_feed_url,
+                params={"package": package, "version_range": version_range},
+            )
+            response.raise_for_status()
+            data = response.json()
             return data.get("cve_ids", [])
         except httpx.HTTPError as exc:  # pragma: no cover - skeleton
             logger.exception("CVE feed error", exc_info=exc)
             return []
+

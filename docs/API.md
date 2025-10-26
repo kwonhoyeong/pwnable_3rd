@@ -24,7 +24,7 @@
   - `500` 내부 서버 오류(Internal server error)
 
 ## EPSSFetcher
-- Endpoint: `POST /epss`
+- Endpoint: `POST /api/v1/epss`
 - Request JSON:
   ```json
   {"cve_id": "CVE-2023-1234"}
@@ -34,6 +34,25 @@
   {
     "cve_id": "CVE-2023-1234",
     "epss_score": 0.87,
+    "collected_at": "2025-10-24T12:34:56Z"
+  }
+  ```
+- Errors:
+  - `400` 잘못된 입력(Bad request)
+  - `502` 외부 API 실패(Upstream failure)
+
+## CVSSFetcher
+- Endpoint: `POST /api/v1/cvss`
+- Request JSON:
+  ```json
+  {"cve_id": "CVE-2023-1234"}
+  ```
+- Response JSON:
+  ```json
+  {
+    "cve_id": "CVE-2023-1234",
+    "cvss_score": 9.8,
+    "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
     "collected_at": "2025-10-24T12:34:56Z"
   }
   ```
@@ -79,6 +98,7 @@
   {
     "cve_id": "CVE-2023-1234",
     "epss_score": 0.87,
+    "cvss_score": 9.8,
     "cases": [],
     "package": "lodash",
     "version_range": "<4.17.21"
@@ -109,9 +129,12 @@
       {
         "cve_id": "CVE-2023-1234",
         "epss_score": 0.87,
+        "cvss_score": 9.8,
         "risk_level": "High",
         "analysis_summary": "…",
-        "recommendations": ["…"]
+        "recommendations": ["…"],
+        "priority_score": 345.0,
+        "priority_label": "P1"
       }
     ]
   }

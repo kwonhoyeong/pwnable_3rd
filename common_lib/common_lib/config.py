@@ -37,21 +37,16 @@ class Settings(BaseSettings):
 
 
 @lru_cache(maxsize=1)
-def _load_settings() -> Settings:
-    """환경 변수 기반 기본 설정을 로드(Load base settings from env)."""
-
-    return Settings()
-
-
 def get_settings(overrides: Dict[str, Any] | None = None) -> Settings:
     """설정 인스턴스 반환(Return a cached settings instance)."""
 
     if overrides:
         return Settings(**overrides)
-    return _load_settings()
+    return Settings()
 
 
 def load_environment() -> None:
     """기본 환경변수를 로드(Load base environment variables)."""
 
     os.environ.setdefault("TZ", "UTC")
+

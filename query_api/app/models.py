@@ -11,9 +11,12 @@ class CVEDetail(BaseModel):
 
     cve_id: str
     epss_score: float
+    cvss_score: float | None = None
     risk_level: str
     analysis_summary: str
     recommendations: List[str]
+    priority_score: float
+    priority_label: str
 
 
 class QueryResponse(BaseModel):

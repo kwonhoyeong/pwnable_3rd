@@ -10,6 +10,7 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional
 from analyzer.app.models import AnalyzerInput, AnalyzerOutput
 from analyzer.app.service import AnalyzerService
 from common_lib.logger import get_logger
+from cvss_fetcher.app.service import CVSSService
 from epss_fetcher.app.service import EPSSService
 from mapping_collector.app.models import PackageInput
 from mapping_collector.app.service import MappingService
@@ -48,6 +49,12 @@ def _fallback_epss(cve_id: str) -> Dict[str, Any]:
     """EPSS 조회 실패 시 기본값(Fallback EPSS payload)."""
 
     return {"cve_id": cve_id, "epss_score": 0.5, "collected_at": datetime.utcnow()}
+
+
+def _fallback_cvss(cve_id: str) -> Dict[str, Any]:
+    """CVSS 조회 실패 시 기본값(Fallback CVSS payload)."""
+
+    return {"cve_id": cve_id, "cvss_score": 5.0, "vector": None, "collected_at": datetime.utcnow()}
 
 
 def _fallback_cases(payload: ThreatInput) -> ThreatResponse:
@@ -103,6 +110,26 @@ async def _collect_epss(
     return epss_results
 
 
+async def _collect_cvss(
+    cvss_service: CVSSService,
+    cve_ids: Iterable[str],
+    progress_cb: ProgressCallback,
+) -> Dict[str, Dict[str, Any]]:
+    """CVE 목록에 대한 CVSS 데이터를 수집(Collect CVSS data for CVEs)."""
+
+    cvss_results: Dict[str, Dict[str, Any]] = {}
+    for cve_id in cve_ids:
+        progress_cb("CVSS", f"{cve_id} CVSS 조회 중(Fetching CVSS score)")
+        cvss_record = await _safe_call(
+            cvss_service.fetch_score(cve_id),
+            fallback=lambda cid=cve_id: _fallback_cvss(cid),
+            step="CVSS",
+            progress_cb=progress_cb,
+        )
+        cvss_results[cve_id] = cvss_record
+    return cvss_results
+
+
 async def run_pipeline(
     package: str,
     version_range: str,
@@ -118,6 +145,7 @@ async def run_pipeline(
 
     mapping_service = MappingService()
     epss_service = EPSSService()
+    cvss_service = CVSSService()
     threat_service = ThreatAggregationService()
     analyzer_service = AnalyzerService()
 
@@ -139,6 +167,7 @@ async def run_pipeline(
         cve_ids = _fallback_cves(package_payload.package)
 
     epss_results = await _collect_epss(epss_service, cve_ids, progress_cb)
+    cvss_results = await _collect_cvss(cvss_service, cve_ids, progress_cb)
 
     pipeline_results: List[Dict[str, Any]] = []
     for cve_id in cve_ids:
@@ -163,6 +192,7 @@ async def run_pipeline(
         analysis_input = AnalyzerInput(
             cve_id=cve_id,
             epss_score=float(epss_results[cve_id].get("epss_score", 0.0)),
+            cvss_score=float(cvss_results[cve_id].get("cvss_score", 0.0)),
             cases=[case.dict() for case in threat_response.cases],
             package=package_payload.package,
             version_range=package_payload.version_range,
@@ -184,6 +214,13 @@ async def run_pipeline(
                 "epss": {
                     "epss_score": float(epss_results[cve_id].get("epss_score", 0.0)),
                     "collected_at": epss_results[cve_id]
+                    .get("collected_at", datetime.utcnow())
+                    .isoformat(),
+                },
+                "cvss": {
+                    "cvss_score": float(cvss_results[cve_id].get("cvss_score", 0.0)),
+                    "vector": cvss_results[cve_id].get("vector"),
+                    "collected_at": cvss_results[cve_id]
                     .get("collected_at", datetime.utcnow())
                     .isoformat(),
                 },

@@ -1,7 +1,6 @@
 """데이터베이스 연결 풀(Database connection pool)."""
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -26,7 +25,6 @@ async def get_engine() -> AsyncEngine:
     return _engine
 
 
-@asynccontextmanager
 async def get_session() -> AsyncIterator[AsyncSession]:
     """세션 컨텍스트 관리자(Session context manager)."""
 
@@ -34,13 +32,10 @@ async def get_session() -> AsyncIterator[AsyncSession]:
     if _session_factory is None:
         engine = await get_engine()
         _session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with _session_factory() as session:
+        try:
+            yield session
+        except Exception as exc:  # pragma: no cover - skeleton
+            logger.exception("Database session error", exc_info=exc)
+            raise
 
-    session = _session_factory()
-    try:
-        yield session
-    except Exception as exc:  # pragma: no cover - skeleton
-        await session.rollback()
-        logger.exception("Database session error", exc_info=exc)
-        raise
-    finally:
-        await session.close()
