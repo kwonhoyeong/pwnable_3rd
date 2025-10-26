@@ -35,7 +35,8 @@ async def _safe_call(coro: Awaitable[Any], fallback: Callable[[], Any], step: st
         return await coro
     except Exception as exc:  # pragma: no cover - prototype safety
         progress_cb(step, f"오류 발생, 대체 경로 사용(Error occurred, using fallback): {exc}")
-        logger.exception("%s failed", step, exc_info=exc)
+        logger.warning("%s 단계에서 예외 발생(Exception during %s): %s", step, step, exc)
+        logger.debug("%s failure details", step, exc_info=exc)
         return fallback()
 
 

@@ -24,7 +24,7 @@ class EPSSService:
         retries = 3
         for attempt in range(1, retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
                     response = await client.get(f"{self._base_url}/epss", params={"cve": cve_id})
                     response.raise_for_status()
                     data = response.json()
@@ -33,9 +33,17 @@ class EPSSService:
                     "epss_score": float(data.get("data", [{}])[0].get("epss", 0.0)),
                     "collected_at": datetime.utcnow(),
                 }
-            except httpx.HTTPError as exc:  # pragma: no cover - skeleton
-                logger.warning("EPSS API attempt %s failed", attempt, exc_info=exc)
-                if attempt == retries:
-                    raise
+            except httpx.HTTPStatusError as exc:  # pragma: no cover - skeleton fallback
+                logger.warning(
+                    "EPSS API HTTP 오류 발생(HTTP error on attempt %s): %s", attempt, exc
+                )
+                logger.debug("EPSS failure details", exc_info=exc)
+            except httpx.HTTPError as exc:  # pragma: no cover - skeleton fallback
+                logger.warning("EPSS API 네트워크 오류(Network error) attempt %s: %s", attempt, exc)
+                logger.debug("EPSS failure details", exc_info=exc)
+
+        logger.info(
+            "EPSS API 연결 실패로 기본 점수 반환(Falling back to default EPSS score for %s)", cve_id
+        )
         return {"cve_id": cve_id, "epss_score": 0.0, "collected_at": datetime.utcnow()}
 

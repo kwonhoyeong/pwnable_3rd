@@ -22,10 +22,9 @@ class CVSSService:
         """CVSS 점수를 조회하고 정규화(Fetch and normalize CVSS score)."""
 
         retries = 3
-        last_error: Exception | None = None
         for attempt in range(1, retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
                     response = await client.get(f"{self._base_url}/{cve_id}")
                     response.raise_for_status()
                     data = response.json()
@@ -43,9 +42,16 @@ class CVSSService:
                     "vector": vector,
                     "collected_at": datetime.utcnow(),
                 }
+            except httpx.HTTPStatusError as exc:  # pragma: no cover - skeleton fallback
+                logger.warning(
+                    "CVSS API HTTP 오류 발생(HTTP error on attempt %s): %s", attempt, exc
+                )
+                logger.debug("CVSS failure details", exc_info=exc)
             except httpx.HTTPError as exc:  # pragma: no cover - skeleton fallback
-                last_error = exc
-                logger.warning("CVSS API attempt %s failed", attempt, exc_info=exc)
-        if last_error:
-            raise last_error
+                logger.warning("CVSS API 네트워크 오류(Network error) attempt %s: %s", attempt, exc)
+                logger.debug("CVSS failure details", exc_info=exc)
+
+        logger.info(
+            "CVSS API 연결 실패로 기본 점수 반환(Falling back to default CVSS score for %s)", cve_id
+        )
         return {"cve_id": cve_id, "cvss_score": 0.0, "vector": None, "collected_at": datetime.utcnow()}

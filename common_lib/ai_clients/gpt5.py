@@ -27,16 +27,26 @@ class GPT5Client(IAIClient):
         headers = {"Authorization": f"Bearer {self._api_key}"}
         payload = {"prompt": prompt, **kwargs}
         try:
-            response = await self._client.post(f"{self._base_url}/chat/completions", headers=headers, json=payload)
+            response = await self._client.post(
+                f"{self._base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                follow_redirects=True,
+            )
             response.raise_for_status()
             data = response.json()
             choices = data.get("choices", [])
             if choices:
                 return choices[0].get("message", {}).get("content", "")
             return ""
-        except httpx.HTTPError as exc:  # pragma: no cover - skeleton
-            logger.exception("GPT-5 API error", exc_info=exc)
-            raise
+        except httpx.HTTPStatusError as exc:  # pragma: no cover - skeleton fallback
+            logger.warning("GPT-5 API HTTP 오류(HTTP error): %s", exc)
+            logger.debug("GPT-5 failure details", exc_info=exc)
+            raise RuntimeError(f"GPT-5 API HTTP error: {exc}") from exc
+        except httpx.HTTPError as exc:  # pragma: no cover - skeleton fallback
+            logger.warning("GPT-5 API 네트워크 오류(Network error): %s", exc)
+            logger.debug("GPT-5 failure details", exc_info=exc)
+            raise RuntimeError(f"GPT-5 API network error: {exc}") from exc
 
     async def structured_output(self, prompt: str, schema: Dict[str, Any]) -> Dict[str, Any]:
         """GPT-5 구조화 응답(Structured response from GPT-5)."""

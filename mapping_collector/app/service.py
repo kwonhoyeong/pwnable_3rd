@@ -21,15 +21,20 @@ class MappingService:
         """외부 소스에서 CVE 목록 조회(Fetch CVE list from external source)."""
 
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
                 response = await client.get(
                     self._cve_feed_url,
                     params={"package": package, "version_range": version_range},
                 )
                 response.raise_for_status()
                 data = response.json()
-        except httpx.HTTPError as exc:  # pragma: no cover - skeleton
-            logger.exception("CVE feed error", exc_info=exc)
+        except httpx.HTTPStatusError as exc:  # pragma: no cover - skeleton fallback
+            logger.warning("CVE feed HTTP 오류 발생(HTTP error encountered): %s", exc)
+            logger.debug("CVE feed failure details", exc_info=exc)
+            return []
+        except httpx.HTTPError as exc:  # pragma: no cover - skeleton fallback
+            logger.warning("CVE feed 네트워크 오류(Network error): %s", exc)
+            logger.debug("CVE feed failure details", exc_info=exc)
             return []
 
         return data.get("cve_ids", [])
