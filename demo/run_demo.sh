@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REQUEST_FILE="${SCRIPT_DIR}/sample_request.json"
 
-PACKAGE="$(python3 - "${REQUEST_FILE}" <<'PY'
+PACKAGE="$(python - "${REQUEST_FILE}" <<'PY'
 import json
 import pathlib
 import sys
@@ -16,7 +16,7 @@ print(request.get("package", "lodash"))
 PY
 )"
 
-VERSION_RANGE="$(python3 - "${REQUEST_FILE}" <<'PY'
+VERSION_RANGE="$(python - "${REQUEST_FILE}" <<'PY'
 import json
 import pathlib
 import sys
@@ -26,4 +26,4 @@ print(request.get("version_range", "latest"))
 PY
 )"
 
-python3 "${PROJECT_ROOT}/main.py" --package "${PACKAGE}" --version-range "${VERSION_RANGE}" "$@"
+python "${PROJECT_ROOT}/main.py" --package "${PACKAGE}" --version-range "${VERSION_RANGE}" "$@"

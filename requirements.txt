@@ -3,6 +3,6 @@ uvicorn[standard]>=0.23,<0.30
 pydantic>=1.10,<2.0
 sqlalchemy>=1.4,<2.1
 asyncpg>=0.28,<0.29
-aioredis>=2.0,<3.0
+redis>=5.0,<6.0
 httpx>=0.24,<0.28
 python-dotenv>=0.21,<1.0

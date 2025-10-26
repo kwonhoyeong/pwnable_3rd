@@ -206,6 +206,14 @@ async def run_pipeline(
             progress_cb=progress_cb,
         )
 
+        serialized_cases: List[Dict[str, Any]] = []
+        for case in threat_response.cases:
+            payload = case.dict()
+            collected_at = payload.get("collected_at")
+            if isinstance(collected_at, datetime):
+                payload["collected_at"] = collected_at.isoformat()
+            serialized_cases.append(payload)
+
         pipeline_results.append(
             {
                 "package": package_payload.package,
@@ -224,7 +232,7 @@ async def run_pipeline(
                     .get("collected_at", datetime.utcnow())
                     .isoformat(),
                 },
-                "cases": [case.dict() for case in threat_response.cases],
+                "cases": serialized_cases,
                 "analysis": {
                     **analysis_output.dict(),
                     "generated_at": analysis_output.generated_at.isoformat(),
