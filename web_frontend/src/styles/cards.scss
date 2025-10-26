@@ -1,0 +1,59 @@
+@import './_tokens';
+
+.result-grid {
+  display: grid;
+  gap: $space-lg;
+  grid-template-columns: 1fr 2fr;
+}
+
+.result-grid__cards {
+  display: grid;
+  gap: $space-md;
+}
+
+.result-card {
+  background-color: $color-surface;
+  padding: $space-md;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.result-card__priority {
+  font-weight: 600;
+  color: $color-accent;
+}
+
+.result-detail__priority {
+  font-weight: 600;
+  margin-bottom: $space-sm;
+  color: $color-accent-dark;
+}
+
+.result-card--active {
+  border: 1px solid $color-accent;
+  transform: translateY(-4px);
+}
+
+.result-grid__detail {
+  background-color: $color-surface;
+  padding: $space-lg;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+}
+
+.result-error,
+.result-placeholder {
+  background-color: $color-surface;
+  padding: $space-md;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+}
+
+@media (max-width: 900px) {
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
