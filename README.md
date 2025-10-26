@@ -1,4 +1,4 @@
-# npm 공급망 CVE/EPSS 대응 파이프라인 (NPM Supply Chain CVE/EPSS Response Pipeline)
+# npm 공급망 CVE/EPSS 대응 파이프라인
 
 ## Repository Layout
 ```
