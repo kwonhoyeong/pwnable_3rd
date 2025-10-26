@@ -1,0 +1,33 @@
+@import './_tokens';
+
+.search-form {
+  display: grid;
+  gap: $space-md;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  background-color: $color-surface;
+  padding: $space-lg;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+}
+
+.search-form__group {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.search-form input {
+  padding: $space-sm;
+  border-radius: $radius-md;
+  border: 1px solid transparent;
+}
+
+.search-form button {
+  padding: $space-sm;
+  border-radius: $radius-md;
+  background-color: $color-primary;
+  color: $color-text;
+  border: none;
+  cursor: pointer;
+}
+
