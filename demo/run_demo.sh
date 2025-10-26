@@ -6,6 +6,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REQUEST_FILE="${SCRIPT_DIR}/sample_request.json"
 
+# Add project directories to PYTHONPATH
+export PYTHONPATH="${PROJECT_ROOT}:${PROJECT_ROOT}/common_lib:${PYTHONPATH:-}"
+
 PACKAGE="$(python3 - "${REQUEST_FILE}" <<'PY'
 import json
 import pathlib
