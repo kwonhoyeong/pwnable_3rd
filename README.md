@@ -44,6 +44,20 @@
 python main.py --package lodash
 ```
 
+## Helper Script (`run_pipeline.sh`)
+```bash
+# 최초 실행 시 의존성 설치까지 수행(Install deps on first run)
+bash run_pipeline.sh --package lodash --install-deps
+
+# ThreatAgent 단계를 생략하고 실행(Skip threat collector)
+bash run_pipeline.sh --package lodash --skip-threat-agent
+
+# 실행 전 실행 권한을 부여할 수도 있습니다(optional chmod)
+chmod +x run_pipeline.sh
+./run_pipeline.sh --package lodash
+```
+> `.env` 파일이 준비되어 있어야 하며(PostgreSQL/Redis), 필요한 경우 `--python`으로 다른 인터프리터를 지정할 수 있습니다.
+
 ## Pipeline at a Glance
 1. MappingCollector → CVE 수집(Collect CVEs)
 2. CVSSFetcher → CVSS 기초 점수 수집(Get CVSS base scores)
