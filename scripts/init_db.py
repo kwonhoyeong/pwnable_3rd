@@ -23,7 +23,7 @@ async def init_database() -> None:
     db_dir.mkdir(parents=True, exist_ok=True)
 
     # SQL 스크립트 읽기
-    sql_file = Path(__file__).parent / "init-db.sqlite.sql"
+    sql_file = Path(__file__).parent.parent / "database" / "init-db.sqlite.sql"
     if not sql_file.exists():
         raise FileNotFoundError(f"SQL initialization script not found: {sql_file}")
 
