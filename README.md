@@ -2,7 +2,7 @@
 
 NPM 패키지의 CVE 취약점을 수집하고, CVSS/EPSS 점수를 분석하여 패치 우선순위를 자동으로 산정하는 보안 파이프라인입니다.
 
-## 🚀 Quick Start (3분 안에 시작하기)
+## Quick Start (3분 안에 시작하기)
 
 ### 1. 저장소 클론 및 환경 설정
 ```bash
@@ -25,9 +25,7 @@ curl http://localhost:8004/api/v1/query?package=lodash
 # 브라우저에서 http://localhost:5173 접속
 ```
 
-끝! 🎉
-
-## 📦 프로젝트 구조
+## 프로젝트 구조
 
 ```
 ├── main.py                 # 파이프라인 오케스트레이터
@@ -42,7 +40,7 @@ curl http://localhost:8004/api/v1/query?package=lodash
 └── docs/                  # 상세 문서
 ```
 
-## 🔧 Requirements
+## Requirements
 
 - **Docker & Docker Compose** (권장)
 - Python 3.11+
@@ -50,7 +48,7 @@ curl http://localhost:8004/api/v1/query?package=lodash
 - Redis 6+
 - Node.js 18+ (웹 프론트엔드)
 
-## 📝 환경 변수 설정
+## 환경 변수 설정
 
 `.env` 파일에 다음 항목을 설정하세요:
 
@@ -65,7 +63,7 @@ NT_POSTGRES_DSN=postgresql+asyncpg://ntuser:ntpass@postgres:5432/threatdb
 NT_REDIS_URL=redis://redis:6379/0
 ```
 
-## 🎯 파이프라인 실행 방법
+## 파이프라인 실행 방법
 
 ### Option 1: Docker Compose (가장 간단)
 ```bash
@@ -98,7 +96,7 @@ bash run_pipeline.sh --package lodash --install-deps
 bash run_pipeline.sh --package lodash --skip-threat-agent
 ```
 
-## 🔍 파이프라인 단계
+## 파이프라인 단계
 
 1. **MappingCollector** - NPM 패키지의 CVE 수집
 2. **CVSSFetcher** - CVSS 기본 점수 조회
@@ -107,7 +105,7 @@ bash run_pipeline.sh --package lodash --skip-threat-agent
 5. **Analyzer** - 종합 위험도 산정 및 패치 우선순위 계산
 6. **QueryAPI/WebFrontend** - 결과 조회 및 시각화
 
-## 🌐 서비스 포트
+## 서비스 포트
 
 | 서비스 | 포트 | 설명 |
 |--------|------|------|
@@ -121,14 +119,14 @@ bash run_pipeline.sh --package lodash --skip-threat-agent
 | PostgreSQL | 5432 | 데이터베이스 |
 | Redis | 6379 | 캐시 |
 
-## 📚 문서
+## 문서
 
 - [아키텍처 상세 설명](docs/ARCHITECTURE.md)
 - [API 명세](docs/API.md)
 - [Docker 가이드](docs/DOCKER.md)
 - [팀원 개발 환경 가이드](SETUP.md)
 
-## 🛠️ 개발 가이드
+## 개발 가이드
 
 ### 로그 확인
 ```bash
