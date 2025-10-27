@@ -6,26 +6,28 @@
 - 핵심 구성 요소(Keys): `SearchService`, `SummaryService`, `CaseRepository`, `prompts.py` 템플릿.
 
 ## 사전 준비(Prerequisites)
-1. AI API 키 환경 변수:
+1. 루트 `.env` 파일에 아래 항목을 설정합니다(Set variables in root `.env`):
    ```env
-   PERPLEXITY_API_KEY=...
-   CLAUDE_API_KEY=...
-   GPT5_API_KEY=...
+   NT_PERPLEXITY_API_KEY=...
+   NT_CLAUDE_API_KEY=...
+   NT_GPT5_API_KEY=...
+   NT_POSTGRES_DSN=postgresql+asyncpg://user:pass@localhost:5432/threatdb
+   NT_REDIS_URL=redis://localhost:6379/0
    ```
-2. PostgreSQL 연결 문자열.
-3. (선택) Redis 캐시 URL.
+2. PostgreSQL 및 Redis 인스턴스가 실행 중인지 확인합니다(Ensure PostgreSQL & Redis are running).
 
 ## 설치 및 실행(Setup & Run)
 ```bash
-pip install -r requirements.txt
-python -m uvicorn threat_agent.app.main:app --reload
+cd ..
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn threat_agent.app.main:app --reload
 ```
 - 헬스 체크: `curl http://127.0.0.1:8002/health`
 
 ## 기능 테스트(Function testing)
 1. 검색+요약 체인 테스트(Chain test):
    ```bash
-   curl -X POST http://127.0.0.1:8002/collect \
+   curl -X POST http://127.0.0.1:8002/api/v1/threats \
      -H "Content-Type: application/json" \
      -d '{
        "cve_id": "CVE-2023-1234",

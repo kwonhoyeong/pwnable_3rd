@@ -23,16 +23,12 @@ class ThreatRepository:
     ) -> None:
         """사례 정보를 저장/갱신(Store or update collected cases)."""
 
-        import json
-        # SQLite용: Python list를 JSON 문자열로 변환
-        cases_json = json.dumps(cases)
-
         query = text(
             """
             INSERT INTO threat_cases (cve_id, package, version_range, cases)
             VALUES (:cve_id, :package, :version_range, :cases)
             ON CONFLICT (cve_id, package, version_range)
-            DO UPDATE SET cases = EXCLUDED.cases, updated_at = CURRENT_TIMESTAMP
+            DO UPDATE SET cases = EXCLUDED.cases, updated_at = NOW()
             """
         )
         await self._session.execute(
@@ -41,20 +37,17 @@ class ThreatRepository:
                 "cve_id": cve_id,
                 "package": package,
                 "version_range": version_range,
-                "cases": cases_json,
+                "cases": cases,
             },
         )
 
     async def is_duplicate(self, cve_id: str, source: str) -> bool:
         """중복 여부 검사(Check duplication)."""
 
-        # SQLite용: json_each를 사용하여 JSON 배열 순회
         query = text(
             """
-            SELECT 1 FROM threat_cases, json_each(threat_cases.cases) AS case
-            WHERE threat_cases.cve_id = :cve_id
-            AND json_extract(case.value, '$.source') = :source
-            LIMIT 1
+            SELECT 1 FROM threat_cases, jsonb_array_elements(threat_cases.cases) AS case
+            WHERE threat_cases.cve_id = :cve_id AND case->>'source' = :source LIMIT 1
             """
         )
         result = await self._session.execute(query, {"cve_id": cve_id, "source": source})

@@ -6,25 +6,26 @@
 - 주요 의존성(Core deps): Python 3.11, FastAPI, SQLAlchemy, PostgreSQL, Redis(optional cache hook).
 
 ## 사전 준비(Prerequisites)
-1. PostgreSQL 데이터베이스와 연결 문자열(예: `postgresql+asyncpg://user:pass@localhost:5432/mapping`).
-2. (선택) Redis 인스턴스.
-3. 환경 변수 `.env` (예시):
+1. PostgreSQL과 Redis가 실행 중이어야 합니다(PostgreSQL & Redis running).
+2. 루트 `.env` 파일에 공통 설정을 지정합니다(Set shared config in `.env`):
    ```env
-   DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/mapping
-   REDIS_URL=redis://localhost:6379/0
+   NT_POSTGRES_DSN=postgresql+asyncpg://user:pass@localhost:5432/threatdb
+   NT_REDIS_URL=redis://localhost:6379/0
    ```
+   > 모듈별 별도 DSN이 필요하면 `NT_POSTGRES_DSN` 값을 조정하세요.
 
 ## 설치 및 실행(Setup & Run)
 ```bash
-pip install -r requirements.txt  # 또는 poetry install
-python -m uvicorn mapping_collector.app.main:app --reload
+cd ..  # 저장소 루트로 이동(Change to repo root)
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn mapping_collector.app.main:app --reload
 ```
 - 서비스 기동 후 헬스 체크: `curl http://127.0.0.1:8000/health`
 
 ## 스케줄러 테스트(Testing the scheduler loop)
 - 단일 주기 테스트(Single cycle test):
   ```bash
-  python - <<'PY'
+  python3 - <<'PY'
   import asyncio
   from mapping_collector.app.scheduler import MappingScheduler
 

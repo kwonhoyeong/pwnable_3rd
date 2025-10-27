@@ -6,24 +6,26 @@
 - 주요 의존성(Core deps): Python 3.11, FastAPI, httpx, PostgreSQL.
 
 ## 사전 준비(Prerequisites)
-1. PostgreSQL 연결 문자열 (예: `postgresql+asyncpg://user:pass@localhost:5432/epss`).
-2. `.env` 환경 변수:
+1. PostgreSQL 인스턴스 및 Redis가 실행 중이어야 합니다(PostgreSQL & Redis running).
+2. 루트 `.env` 파일에 다음 값을 지정합니다(Set values in root `.env`):
    ```env
-   DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/epss
-   EPSS_BASE_URL=https://api.first.org/data/v1/epss
+   NT_POSTGRES_DSN=postgresql+asyncpg://user:pass@localhost:5432/threatdb
+   NT_REDIS_URL=redis://localhost:6379/0
    ```
+   > EPSS API 기본 URL은 코드에서 기본값(`https://epss.cyentia.com/api/epss`)을 사용합니다. 필요 시 `EPSSService` 생성자에 전달하세요.
 
 ## 설치 및 실행(Setup & Run)
 ```bash
-pip install -r requirements.txt
-python -m uvicorn epss_fetcher.app.main:app --reload
+cd ..
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn epss_fetcher.app.main:app --reload
 ```
 - 헬스 체크: `curl http://127.0.0.1:8001/health`
 
 ## API 테스트(API Testing)
 - 단일 CVE 점수 요청(Post request):
   ```bash
-  curl -X POST http://127.0.0.1:8001/fetch \
+  curl -X POST http://127.0.0.1:8001/api/v1/epss \
     -H "Content-Type: application/json" \
     -d '{"cve_id": "CVE-2023-1234"}'
   ```
@@ -51,5 +53,5 @@ docker run --rm -p 8001:8000 --env-file ../.env epss-fetcher
 ```
 
 ## 샘플 스케줄 사용(Sample scheduling)
-- 외부 오케스트레이터에서 주기적으로 `/fetch` 엔드포인트 호출 가능.
+- 외부 오케스트레이터에서 주기적으로 `/api/v1/epss` 엔드포인트를 호출할 수 있습니다.
 

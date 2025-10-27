@@ -5,8 +5,7 @@ import os
 from functools import lru_cache
 from typing import Any, Dict
 
-from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic import BaseSettings, Field
 
 
 class Settings(BaseSettings):
@@ -15,11 +14,11 @@ class Settings(BaseSettings):
     app_name: str = Field(default="npm-threat-evaluator", description="서비스 이름(Service name)")
     environment: str = Field(default="development", description="실행 환경(Runtime environment)")
 
-    database_url: str = Field(
-        default="sqlite+aiosqlite:///./data/threatdb.sqlite",
-        description="데이터베이스 연결 URL(Database connection URL)",
+    postgres_dsn: str = Field(
+        default="postgresql+asyncpg://user:password@localhost:5432/threatdb",
+        description="PostgreSQL 연결 DSN(PostgreSQL connection DSN)",
     )
-    cache_ttl: int = Field(default=3600, description="캐시 TTL(초)(Cache TTL in seconds)")
+    redis_url: str = Field(default="redis://localhost:6379/0", description="Redis 접속 URL(Redis connection URL)")
     kafka_bootstrap_servers: str = Field(
         default="kafka:9092",
         description="Kafka 부트스트랩 서버(Kafka bootstrap servers)",
@@ -31,11 +30,10 @@ class Settings(BaseSettings):
 
     log_level: str = Field(default="INFO", description="로그 레벨(Log level)")
 
-    model_config = {
-        "env_prefix": "NT_",
-        "env_file": ".env",
-        "env_file_encoding": "utf-8",
-    }
+    class Config:
+        env_prefix = "NT_"
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
 
 @lru_cache(maxsize=1)

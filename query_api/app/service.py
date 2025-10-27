@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from typing import List, Optional
 
-from common_lib.cache import get_cache
+from common_lib.cache import get_redis
 from common_lib.logger import get_logger
 
 from .models import CVEDetail, QueryResponse
@@ -23,13 +23,13 @@ class QueryService:
         """패키지 또는 CVE 기준으로 조회(Query by package or CVE)."""
 
         cache_key = self._build_cache_key(package, cve_id)
-        cache = None
+        redis = None
         try:
-            cache = await get_cache()
-            cached = await cache.get(cache_key)
+            redis = await get_redis()
+            cached = await redis.get(cache_key)
         except Exception as exc:  # pragma: no cover - cache fallback
             cached = None
-            logger.warning("Cache unavailable, bypassing cache", exc_info=exc)
+            logger.warning("Redis unavailable, bypassing cache", exc_info=exc)
         if cached:
             logger.debug("Cache hit for %s", cache_key)
             return QueryResponse(**json.loads(cached))
@@ -51,9 +51,9 @@ class QueryService:
         else:
             raise ValueError("Either package or cve_id must be provided")
 
-        if cache is not None:
+        if redis is not None:
             try:
-                await cache.set(cache_key, response.json(), ex=self._cache_ttl)
+                await redis.set(cache_key, response.json(), ex=self._cache_ttl)
             except Exception as exc:  # pragma: no cover - cache fallback
                 logger.warning("Failed to populate cache for %s", cache_key, exc_info=exc)
         return response

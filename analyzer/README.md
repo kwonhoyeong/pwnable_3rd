@@ -5,25 +5,26 @@
 - 실행 형태(Runtime): FastAPI 서비스 + 규칙 기반 분석 로직 + AI 보조 권고 텍스트 생성.
 
 ## 사전 준비(Prerequisites)
-1. PostgreSQL 연결 문자열 (예: `postgresql+asyncpg://user:pass@localhost:5432/analyzer`).
-2. (선택) Claude 또는 GPT-5 API 키.
-3. `.env` 예시:
+1. 루트 `.env` 파일에 아래 값을 설정합니다(Configure root `.env`):
    ```env
-   DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/analyzer
-   CLAUDE_API_KEY=...
-   GPT5_API_KEY=...
+   NT_POSTGRES_DSN=postgresql+asyncpg://user:pass@localhost:5432/threatdb
+   NT_PERPLEXITY_API_KEY=...
+   NT_CLAUDE_API_KEY=...
+   NT_GPT5_API_KEY=...
    ```
+2. PostgreSQL 및 Redis 인스턴스를 기동합니다(Start PostgreSQL & Redis).
 
 ## 설치 및 실행(Setup & Run)
 ```bash
-pip install -r requirements.txt
-python -m uvicorn analyzer.app.main:app --reload
+cd ..
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn analyzer.app.main:app --reload
 ```
 - 헬스 체크: `curl http://127.0.0.1:8003/health`
 
 ## 분석 요청 테스트(Analysis request test)
 ```bash
-curl -X POST http://127.0.0.1:8003/analyze \
+curl -X POST http://127.0.0.1:8003/api/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{
         "cve_id": "CVE-2023-1234",

@@ -1,71 +1,51 @@
-"""인메모리 캐시 유틸리티(In-memory cache utilities)."""
+"""Redis 캐시 유틸리티(Redis cache utilities)."""
 from __future__ import annotations
 
 import asyncio
-import time
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 try:
-    from cachetools import TTLCache
+    import redis.asyncio as redis
 except ImportError:  # pragma: no cover - optional dependency fallback
-    TTLCache = None  # type: ignore[assignment]
+    redis = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from redis.asyncio import Redis
+else:
+    Redis = Any
 
 from .config import get_settings
 from .logger import get_logger
 
 logger = get_logger(__name__)
-_cache: Optional["MemoryCache"] = None
+_redis_pool: Optional[Redis] = None
 _lock = asyncio.Lock()
 
 
-class MemoryCache:
-    """메모리 기반 캐시 래퍼(Memory-based cache wrapper)."""
+async def get_redis() -> Redis:
+    """Redis 연결 풀 반환(Return redis connection pool)."""
 
-    def __init__(self, ttl: int = 3600, maxsize: int = 1000):
-        if TTLCache is None:
-            raise RuntimeError("cachetools 라이브러리가 설치되어 있지 않습니다(cachetools not installed)")
-        self._cache = TTLCache(maxsize=maxsize, ttl=ttl)
-        self._lock = asyncio.Lock()
-
-    async def get(self, key: str) -> Optional[str]:
-        """캐시에서 값 조회(Get value from cache)."""
-        async with self._lock:
-            return self._cache.get(key)
-
-    async def set(self, key: str, value: str, ex: Optional[int] = None) -> None:
-        """캐시에 값 저장(Set value in cache)."""
-        async with self._lock:
-            self._cache[key] = value
-
-    async def delete(self, key: str) -> None:
-        """캐시에서 값 삭제(Delete value from cache)."""
-        async with self._lock:
-            self._cache.pop(key, None)
-
-    async def close(self) -> None:
-        """캐시 종료(Close cache)."""
-        async with self._lock:
-            self._cache.clear()
-
-
-async def get_cache() -> MemoryCache:
-    """메모리 캐시 반환(Return memory cache)."""
-
-    global _cache
-    if _cache is None:
+    global _redis_pool
+    if redis is None:
+        raise RuntimeError("redis 라이브러리가 설치되어 있지 않습니다(Redis client not installed)")
+    if _redis_pool is None:
         async with _lock:
-            if _cache is None:
+            if _redis_pool is None:
                 settings = get_settings()
-                logger.info("Initializing in-memory cache")
-                _cache = MemoryCache(ttl=settings.cache_ttl, maxsize=1000)
-    return _cache
+                logger.info("Connecting to Redis")
+                _redis_pool = await redis.from_url(  # type: ignore[assignment]
+                    settings.redis_url,
+                    encoding="utf-8",
+                    decode_responses=True,
+                )
+    return cast(Redis, _redis_pool)
 
 
-async def close_cache() -> None:
-    """캐시 종료(Close cache)."""
+async def close_redis() -> None:
+    """Redis 연결 종료(Close redis connection)."""
 
-    global _cache
-    if _cache is not None:
-        await _cache.close()
-        _cache = None
+    global _redis_pool
+    if _redis_pool is not None:
+        await _redis_pool.close()
+        _redis_pool = None
 

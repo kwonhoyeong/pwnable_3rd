@@ -26,7 +26,7 @@ client = ClaudeClient(api_key=settings.claude_api_key)
   ```
 - 로거 확인(Logger verification):
   ```bash
-  python - <<'PY'
+  python3 - <<'PY'
   from common_lib.logger import get_logger
   logger = get_logger("demo")
   logger.info("CommonLib logger ready")

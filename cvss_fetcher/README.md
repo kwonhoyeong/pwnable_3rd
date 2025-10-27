@@ -10,15 +10,16 @@ CVSSFetcher는 CVE 식별자를 입력받아 CVSS(Base Score) 정보를 수집�
 
 ## 실행 방법(How to Run)
 ```bash
-# 가상환경 생성 및 의존성 설치
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+# 루트에서 가상환경 생성 및 의존성 설치(Create venv & install deps from repo root)
+cd ..
+python3 -m venv .venv && source .venv/bin/activate
+python3 -m pip install -r requirements.txt
 
-# 환경 변수 설정
-export NT_POSTGRES_DSN=postgresql+asyncpg://user:pass@localhost:5432/threatdb
+# 루트 .env 파일 구성(Set environment via .env)
+cp .env.example .env  # 필요한 경우 API 키/DSN 수정
 
-# 애플리케이션 실행
-uvicorn cvss_fetcher.app.main:app --reload --port 8005
+# 애플리케이션 실행(Run FastAPI service)
+python3 -m uvicorn cvss_fetcher.app.main:app --reload --port 8005
 ```
 
 ## 테스트 입력 예제(Sample Input)
