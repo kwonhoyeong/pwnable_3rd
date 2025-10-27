@@ -27,6 +27,10 @@ class AnalysisRepository:
     ) -> None:
         """분석 결과 저장(Upsert analysis result)."""
 
+        import json
+        # SQLite용: ARRAY를 JSON 문자열로 변환
+        recommendations_json = json.dumps(recommendations)
+
         query = text(
             """
             INSERT INTO analysis_results (cve_id, risk_level, recommendations, analysis_summary, generated_at)
@@ -43,7 +47,7 @@ class AnalysisRepository:
             {
                 "cve_id": cve_id,
                 "risk_level": risk_level,
-                "recommendations": recommendations,
+                "recommendations": recommendations_json,
                 "analysis_summary": analysis_summary,
                 "generated_at": generated_at,
             },

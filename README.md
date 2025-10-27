@@ -44,8 +44,7 @@ curl http://localhost:8004/api/v1/query?package=lodash
 
 - **Docker & Docker Compose** (권장)
 - Python 3.11+
-- PostgreSQL 14+
-- Redis 6+
+- SQLite 3+ (내장)
 - Node.js 18+ (웹 프론트엔드)
 
 ## 환경 변수 설정
@@ -58,9 +57,9 @@ NT_PERPLEXITY_API_KEY=your_key_here
 NT_CLAUDE_API_KEY=your_key_here
 NT_GPT5_API_KEY=your_key_here
 
-# Database (Docker 사용 시 자동 설정됨)
-NT_POSTGRES_DSN=postgresql+asyncpg://ntuser:ntpass@postgres:5432/threatdb
-NT_REDIS_URL=redis://redis:6379/0
+# Database (SQLite - 로컬 파일 기반)
+NT_DATABASE_URL=sqlite+aiosqlite:///./data/threatdb.sqlite
+NT_CACHE_TTL=3600
 ```
 
 ## 파이프라인 실행 방법
@@ -79,11 +78,10 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 # 2. 의존성 설치
 pip install -r requirements.txt
 
-# 3. PostgreSQL & Redis 실행 (별도)
-# 4. DB 초기화
-psql -U ntuser -d threatdb -f init-db.sql
+# 3. DB 초기화
+python init_db.py
 
-# 5. 파이프라인 실행
+# 4. 파이프라인 실행
 python main.py --package lodash
 ```
 
@@ -116,8 +114,6 @@ bash run_pipeline.sh --package lodash --skip-threat-agent
 | Analyzer | 8003 | 종합 분석 |
 | QueryAPI | 8004 | REST API |
 | WebFrontend | 5173 | 대시보드 |
-| PostgreSQL | 5432 | 데이터베이스 |
-| Redis | 6379 | 캐시 |
 
 ## 문서
 
@@ -144,7 +140,11 @@ docker-compose restart analyzer
 
 ### DB 접속
 ```bash
-docker-compose exec postgres psql -U ntuser -d threatdb
+# SQLite 데이터베이스 직접 접속
+sqlite3 data/threatdb.sqlite
+
+# 또는 Docker 컨테이너 내부에서
+docker-compose exec query-api sqlite3 /app/data/threatdb.sqlite
 ```
 
 ### 헬스체크
@@ -158,7 +158,17 @@ curl http://localhost:8004/health
 
 1. `.env` 파일은 절대 커밋하지 마세요 (API 키 포함)
 2. 포트 충돌 시 `docker-compose down` 후 재시작
-3. 데이터 초기화: `docker-compose down -v` (주의: 모든 데이터 삭제)
+3. 데이터 초기화: `python init_db.py` (기존 DB 파일 백업 권장)
+4. SQLite 데이터베이스는 `data/threatdb.sqlite`에 저장되며, 실행 결과가 로컬에 누적됩니다
+
+## 데이터베이스 정보
+
+이 프로젝트는 **로컬 파일 기반 SQLite** 데이터베이스를 사용합니다:
+
+- **위치**: `./data/threatdb.sqlite`
+- **초기화**: `python init_db.py` 실행
+- **백업**: `data/` 디렉토리를 직접 복사
+- **버전 관리**: 초기 데이터는 `init-db.sqlite.sql`에 정의되어 있으며, 실행 결과는 Git 저장소에 포함됩니다
 
 ## 📄 License
 

@@ -20,35 +20,36 @@ class QueryRepository:
     async def find_by_package(self, package: str) -> List[dict[str, object]]:
         """패키지로 조회(Look up by package)."""
 
+        # SQLite용: json_each를 사용하여 JSON 배열을 제대로 확장
         query = text(
             """
-            WITH expanded AS (
-                SELECT package, version_range, UNNEST(cve_ids) AS cve_id
-                FROM package_cve_mapping
-                WHERE package = :package
-            )
-            SELECT exp.cve_id,
-                   COALESCE(es.epss_score, 0.0) AS epss_score,
-                   cs.cvss_score,
-                   ar.risk_level,
-                   ar.analysis_summary,
-                   ar.recommendations
-            FROM expanded exp
-            LEFT JOIN epss_scores es ON es.cve_id = exp.cve_id
-            LEFT JOIN cvss_scores cs ON cs.cve_id = exp.cve_id
-            LEFT JOIN analysis_results ar ON ar.cve_id = exp.cve_id
+            SELECT
+                json_extract(cve.value, '$') AS cve_id,
+                COALESCE(es.epss_score, 0.0) AS epss_score,
+                cs.cvss_score,
+                ar.risk_level,
+                ar.analysis_summary,
+                ar.recommendations
+            FROM package_cve_mapping pcm,
+                 json_each(pcm.cve_ids) AS cve
+            LEFT JOIN epss_scores es ON es.cve_id = json_extract(cve.value, '$')
+            LEFT JOIN cvss_scores cs ON cs.cve_id = json_extract(cve.value, '$')
+            LEFT JOIN analysis_results ar ON ar.cve_id = json_extract(cve.value, '$')
+            WHERE pcm.package = :package
             """
         )
         result = await self._session.execute(query, {"package": package})
         rows = result.fetchall()
+
+        import json
         return [
             {
-                "cve_id": row.cve_id,
+                "cve_id": row.cve_id.strip('"') if isinstance(row.cve_id, str) else row.cve_id,
                 "epss_score": row.epss_score or 0.0,
                 "cvss_score": row.cvss_score,
                 "risk_level": row.risk_level or "Unknown",
                 "analysis_summary": row.analysis_summary or "",
-                "recommendations": row.recommendations or [],
+                "recommendations": json.loads(row.recommendations) if isinstance(row.recommendations, str) else (row.recommendations or []),
             }
             for row in rows
         ]
@@ -72,6 +73,8 @@ class QueryRepository:
         )
         result = await self._session.execute(query, {"cve_id": cve_id})
         rows = result.fetchall()
+
+        import json
         return [
             {
                 "cve_id": row.cve_id,
@@ -79,7 +82,7 @@ class QueryRepository:
                 "cvss_score": row.cvss_score,
                 "risk_level": row.risk_level or "Unknown",
                 "analysis_summary": row.analysis_summary or "",
-                "recommendations": row.recommendations or [],
+                "recommendations": json.loads(row.recommendations) if isinstance(row.recommendations, str) else (row.recommendations or []),
             }
             for row in rows
         ]
