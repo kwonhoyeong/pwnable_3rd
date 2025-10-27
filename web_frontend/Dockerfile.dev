@@ -1,0 +1,14 @@
+# WebFrontend 개발용 Dockerfile(Development Dockerfile)
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 의존성 설치를 위한 package.json 우선 복사(Copy package manifests first for better caching)
+COPY package.json package-lock.json* ./
+RUN npm install
+
+# 실제 소스는 docker-compose 볼륨으로 마운트됩니다(Source is volume-mounted in docker-compose)
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
