@@ -1,6 +1,8 @@
 """데이터베이스 연결 풀(Database connection pool)."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -21,7 +23,17 @@ async def get_engine() -> AsyncEngine:
     if _engine is None:
         settings = get_settings()
         logger.info("Initializing async engine")
-        _engine = create_async_engine(settings.postgres_dsn, future=True, echo=False)
+
+        # SQLite 데이터 디렉토리 생성
+        db_url = settings.database_url
+        if db_url.startswith("sqlite"):
+            # sqlite+aiosqlite:///./data/threatdb.sqlite -> ./data/threatdb.sqlite
+            db_path = db_url.split("///", 1)[1] if "///" in db_url else "data/threatdb.sqlite"
+            db_dir = Path(db_path).parent
+            db_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"SQLite database directory: {db_dir}")
+
+        _engine = create_async_engine(settings.database_url, future=True, echo=False)
     return _engine
 
 
