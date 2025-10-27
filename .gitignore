@@ -1,6 +1,7 @@
 # Environment
 .env
 .env.local
+.env.*.local
 
 # Python
 *.pyc
@@ -12,6 +13,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.venv/
+venv/
+*.egg
 
 # Node
 node_modules/
@@ -19,6 +23,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+package-lock.json
+dist/
 
 # IDE
 .vscode/
@@ -26,15 +32,37 @@ yarn-error.log*
 *.swp
 *.swo
 *~
+.history/
 
 # OS
 .DS_Store
 Thumbs.db
 Desktop.ini
+*.bak
 
 # Logs
 *.log
+logs/
 
 # Build outputs
 *.whl
 *.tar.gz
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
