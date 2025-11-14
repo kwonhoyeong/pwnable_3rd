@@ -15,26 +15,26 @@
                         │  MappingAgent   │◄────► Redis (CVE cache)
                         └────────┬────────┘
                                  │CVE IDs
-              ┌──────────────────┴──────────────────┐
-              │                                     │
-              ▼                                     ▼
-      ┌───────────────┐                     ┌───────────────┐
-      │   CVSSAgent   │◄────► Redis cache   │   EPSSAgent   │◄────► Redis cache
-      └───────────────┘                     └───────────────┘
-              │                                     │
-              └──────────────┬──────────────────────┘
-                             ▼
-                      ┌──────────────┐
-                      │ ThreatAgent  │◄────► Redis cache (per CVE)
-                      └──────────────┘
-                             │cases
-                             ▼
-                      ┌──────────────┐
-                      │ AnalyzerAgent│◄────► Redis cache (analysis)
-                      └──────────────┘
-                             │reports
-                             ▼
-                      PostgreSQL/QueryAPI/Web
+                    ┌────────────┴────────────────────────┐
+                    │                                     │
+                    ▼                                     ▼
+            ┌───────────────┐                     ┌───────────────┐
+            │   CVSSAgent   │◄────► Redis cache   │   EPSSAgent   │◄────► Redis cache
+            └───────────────┘                     └───────────────┘
+                    │                                     │
+                    └──────────────┬──────────────────────┘
+                                   ▼
+                            ┌──────────────┐
+                            │ ThreatAgent  │◄────► Redis cache (per CVE)
+                            └──────────────┘
+                                   │cases
+                                   ▼
+                            ┌──────────────┐
+                            │ AnalyzerAgent│◄────► Redis cache (analysis)
+                            └──────────────┘
+                                   │reports
+                                   ▼
+                            PostgreSQL/QueryAPI/Web
 ```
 
 ## Data Flow
