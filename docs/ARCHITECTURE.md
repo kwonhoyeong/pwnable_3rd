@@ -6,52 +6,8 @@
 - **아키텍처 패턴**: Event-driven pipeline with caching and persistence layers
 
 ## High-Level Diagram
-```
-                    ┌────────────────────────┐
-                    │  AgentOrchestrator     │
-                    │  (Pipeline Manager)    │
-                    └────────────┬───────────┘
-                                 │progress events
-                                 ▼
-                        ┌─────────────────┐
-                        │  MappingAgent   │◄────► Redis (CVE cache)
-                        └────────┬────────┘
-                                 │CVE IDs ┌──────────────┐
-                                 ├────────►│ PostgreSQL  │
-              ┌──────────────────┴─────────┤   Mapping   │
-              │                            └──────────────┘
-              │  (parallel execution)
-              ▼                                     ▼
-      ┌───────────────┐                     ┌───────────────┐
-      │   CVSSAgent   │◄────► Redis cache   │   EPSSAgent   │◄────► Redis cache
-      └───────┬───────┘                     └───────┬───────┘
-              │                                     │
-              │  ┌──────────────┐                  │
-              └──►│ PostgreSQL  │◄─────────────────┘
-                  │ CVSS/EPSS   │
-                  └──────────────┘
-                         │
-                         ▼
-                  ┌──────────────┐
-                  │ ThreatAgent  │◄────► Redis cache (per CVE)
-                  │ (Sanitized)  │
-                  └──────┬───────┘
-                         │cases  ┌──────────────┐
-                         ├───────►│ PostgreSQL  │
-                         │        │ ThreatCases │
-                         │        └──────────────┘
-                         ▼
-                  ┌──────────────┐
-                  │ AnalyzerAgent│◄────► Redis cache (analysis)
-                  └──────┬───────┘
-                         │reports ┌──────────────┐
-                         └────────►│ PostgreSQL  │
-                                   │  Analysis   │
-                                   └──────┬───────┘
-                                          │
-                                          ▼
-                                   QueryAPI/WebFrontend
-```
+<img width="725" height="1183" alt="이름 없는 노트북" src="https://github.com/user-attachments/assets/be8b85c0-a7eb-4d77-a20b-f9a49886c315" />
+
 
 ## Data Flow
 
