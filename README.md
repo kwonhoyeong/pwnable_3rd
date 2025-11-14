@@ -59,12 +59,12 @@ chmod +x run_pipeline.sh
 > `.env` 파일이 준비되어 있어야 하며(PostgreSQL/Redis), 필요한 경우 `--python`으로 다른 인터프리터를 지정할 수 있습니다.
 
 ## Pipeline at a Glance
-1. MappingCollector → CVE 수집(Collect CVEs)
-2. CVSSFetcher → CVSS 기초 점수 수집(Get CVSS base scores)
-3. EPSSFetcher → 위험 점수 조회(Get EPSS scores)
-4. ThreatAgent → 공격 사례 탐색 및 요약(Search & summarize threat cases)
-5. Analyzer → 위험 등급/권고 산출(Calculate risk & advice)
-6. QueryAPI/WebFrontend → 우선순위 결과 제공(Present prioritized results)
+1. `AgentOrchestrator` → 각 에이전트의 실행 순서를 정의하고 진행 상황을 브로드캐스트합니다.
+2. MappingAgent → 패키지/버전 입력에 대한 CVE를 캐시 조회 후 수집합니다.
+3. CVSSAgent & EPSSAgent → `asyncio.gather`로 동시에 실행되며 점수를 조회하고 캐싱합니다.
+4. ThreatAgent → 필요 시 위협 사례를 모으고, `--skip-threat-agent` 옵션 시 안전한 기본값으로 대체합니다.
+5. AnalyzerAgent → 위협·점수 데이터를 통합해 위험 등급/권고를 생성하고 캐시로 재사용합니다.
+6. QueryAPI/WebFrontend → Redis 캐시로 가속된 통합 결과를 사용자에게 노출합니다.
 
 ## Documentation
 - 더 자세한 내용은 `docs/ARCHITECTURE.md`, `docs/API.md` 참고
