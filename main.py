@@ -4,20 +4,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 
-from analyzer.app.models import AnalyzerInput, AnalyzerOutput
-from analyzer.app.service import AnalyzerService
+from agent_orchestrator import AgentOrchestrator, ProgressCallback
 from common_lib.logger import get_logger
-from cvss_fetcher.app.service import CVSSService
-from epss_fetcher.app.service import EPSSService
-from mapping_collector.app.models import PackageInput
-from mapping_collector.app.service import MappingService
-from threat_agent.app.models import ThreatCase, ThreatInput, ThreatResponse
-from threat_agent.app.services import ThreatAggregationService
-
-ProgressCallback = Callable[[str, str], None]
 
 logger = get_logger(__name__)
 
@@ -26,109 +16,6 @@ def _default_progress(step: str, message: str) -> None:
     """기본 진행 상황 콜백(Default progress callback)."""
 
     logger.info("[%s] %s", step, message)
-
-
-async def _safe_call(coro: Awaitable[Any], fallback: Callable[[], Any], step: str, progress_cb: ProgressCallback) -> Any:
-    """안전 호출 래퍼(Wrapper to safely invoke async operations)."""
-
-    try:
-        return await coro
-    except Exception as exc:  # pragma: no cover - prototype safety
-        progress_cb(step, f"오류 발생, 대체 경로 사용(Error occurred, using fallback): {exc}")
-        logger.warning("%s 단계에서 예외 발생(Exception during %s): %s", step, step, exc)
-        logger.debug("%s failure details", step, exc_info=exc)
-        return fallback()
-
-
-def _fallback_cves(package: str) -> List[str]:
-    """CVE 조회 실패 시 대체 목록(Fallback CVE list)."""
-
-    return [f"CVE-FAKE-{package.upper()}-0001"]
-
-
-def _fallback_epss(cve_id: str) -> Dict[str, Any]:
-    """EPSS 조회 실패 시 기본값(Fallback EPSS payload)."""
-
-    return {"cve_id": cve_id, "epss_score": 0.5, "collected_at": datetime.utcnow()}
-
-
-def _fallback_cvss(cve_id: str) -> Dict[str, Any]:
-    """CVSS 조회 실패 시 기본값(Fallback CVSS payload)."""
-
-    return {"cve_id": cve_id, "cvss_score": 5.0, "vector": None, "collected_at": datetime.utcnow()}
-
-
-def _fallback_cases(payload: ThreatInput) -> ThreatResponse:
-    """위협 수집 실패 시 기본 사례(Fallback threat cases)."""
-
-    fallback_case = ThreatCase(
-        source="https://example.com/prototype-case",
-        title=f"Fallback case for {payload.cve_id}",
-        date=datetime.utcnow().date().isoformat(),
-        summary="AI API 호출 실패로 인해 기본 설명(Default narrative due to AI error).",
-        collected_at=datetime.utcnow(),
-    )
-    return ThreatResponse(
-        cve_id=payload.cve_id,
-        package=payload.package,
-        version_range=payload.version_range,
-        cases=[fallback_case],
-    )
-
-
-def _fallback_analysis(payload: AnalyzerInput) -> AnalyzerOutput:
-    """분석 실패 시 기본 보고(Fallback analysis report)."""
-
-    return AnalyzerOutput(
-        cve_id=payload.cve_id,
-        risk_level="Medium",
-        recommendations=[
-            "패키지를 최신 버전으로 업그레이드하세요(Upgrade package to latest).",
-            "추가 모니터링을 수행하세요(Enable heightened monitoring).",
-        ],
-        analysis_summary="AI 분석 실패로 수동 검토 필요(Manual review required due to AI failure).",
-        generated_at=datetime.utcnow(),
-    )
-
-
-async def _collect_epss(
-    epss_service: EPSSService,
-    cve_ids: Iterable[str],
-    progress_cb: ProgressCallback,
-) -> Dict[str, Dict[str, Any]]:
-    """CVE 목록에 대한 EPSS 데이터를 수집(Collect EPSS data for CVEs)."""
-
-    epss_results: Dict[str, Dict[str, Any]] = {}
-    for cve_id in cve_ids:
-        progress_cb("EPSS", f"{cve_id} 점수 조회 중(Fetching score)")
-        epss_record = await _safe_call(
-            epss_service.fetch_score(cve_id),
-            fallback=lambda cid=cve_id: _fallback_epss(cid),
-            step="EPSS",
-            progress_cb=progress_cb,
-        )
-        epss_results[cve_id] = epss_record
-    return epss_results
-
-
-async def _collect_cvss(
-    cvss_service: CVSSService,
-    cve_ids: Iterable[str],
-    progress_cb: ProgressCallback,
-) -> Dict[str, Dict[str, Any]]:
-    """CVE 목록에 대한 CVSS 데이터를 수집(Collect CVSS data for CVEs)."""
-
-    cvss_results: Dict[str, Dict[str, Any]] = {}
-    for cve_id in cve_ids:
-        progress_cb("CVSS", f"{cve_id} CVSS 조회 중(Fetching CVSS score)")
-        cvss_record = await _safe_call(
-            cvss_service.fetch_score(cve_id),
-            fallback=lambda cid=cve_id: _fallback_cvss(cid),
-            step="CVSS",
-            progress_cb=progress_cb,
-        )
-        cvss_results[cve_id] = cvss_record
-    return cvss_results
 
 
 async def run_pipeline(
@@ -140,113 +27,14 @@ async def run_pipeline(
 ) -> Dict[str, Any]:
     """전체 파이프라인을 실행하고 결과 반환(Run the full pipeline and return results)."""
 
-    progress_cb("INIT", "서비스 초기화 중(Initializing services)")
-    if force:
-        progress_cb("INIT", "캐시 무시 모드 활성화(Cache bypass enabled)")
-
-    mapping_service = MappingService()
-    epss_service = EPSSService()
-    cvss_service = CVSSService()
-    threat_service = ThreatAggregationService()
-    analyzer_service = AnalyzerService()
-
-    package_payload = PackageInput(
+    orchestrator = AgentOrchestrator()
+    return await orchestrator.orchestrate_pipeline(
         package=package,
         version_range=version_range,
-        collected_at=datetime.utcnow(),
-    )
-
-    progress_cb("MAPPING", f"{package} 패키지의 CVE 조회(Fetching CVEs)")
-    cve_ids = await _safe_call(
-        mapping_service.fetch_cves(package_payload.package, package_payload.version_range),
-        fallback=lambda: _fallback_cves(package_payload.package),
-        step="MAPPING",
+        skip_threat_agent=skip_threat_agent,
+        force=force,
         progress_cb=progress_cb,
     )
-    if not cve_ids:
-        progress_cb("MAPPING", "CVE 목록이 비어 대체 목록 사용(No CVEs, fallback applied)")
-        cve_ids = _fallback_cves(package_payload.package)
-
-    epss_results = await _collect_epss(epss_service, cve_ids, progress_cb)
-    cvss_results = await _collect_cvss(cvss_service, cve_ids, progress_cb)
-
-    pipeline_results: List[Dict[str, Any]] = []
-    for cve_id in cve_ids:
-        threat_payload = ThreatInput(
-            cve_id=cve_id,
-            package=package_payload.package,
-            version_range=package_payload.version_range,
-        )
-
-        if skip_threat_agent:
-            progress_cb("THREAT", f"{cve_id} 위협 수집 건너뛰기(Skipping threat collection)")
-            threat_response = _fallback_cases(threat_payload)
-        else:
-            progress_cb("THREAT", f"{cve_id} 공격 사례 수집 중(Collecting threat cases)")
-            threat_response = await _safe_call(
-                threat_service.collect(threat_payload),
-                fallback=lambda payload=threat_payload: _fallback_cases(payload),
-                step="THREAT",
-                progress_cb=progress_cb,
-            )
-
-        analysis_input = AnalyzerInput(
-            cve_id=cve_id,
-            epss_score=float(epss_results[cve_id].get("epss_score", 0.0)),
-            cvss_score=float(cvss_results[cve_id].get("cvss_score", 0.0)),
-            cases=[case.dict() for case in threat_response.cases],
-            package=package_payload.package,
-            version_range=package_payload.version_range,
-        )
-
-        progress_cb("ANALYZE", f"{cve_id} 위험도 평가 중(Analyzing risk)")
-        analysis_output = await _safe_call(
-            analyzer_service.analyze(analysis_input),
-            fallback=lambda payload=analysis_input: _fallback_analysis(payload),
-            step="ANALYZE",
-            progress_cb=progress_cb,
-        )
-
-        serialized_cases: List[Dict[str, Any]] = []
-        for case in threat_response.cases:
-            payload = case.dict()
-            collected_at = payload.get("collected_at")
-            if isinstance(collected_at, datetime):
-                payload["collected_at"] = collected_at.isoformat()
-            serialized_cases.append(payload)
-
-        pipeline_results.append(
-            {
-                "package": package_payload.package,
-                "version_range": package_payload.version_range,
-                "cve_id": cve_id,
-                "epss": {
-                    "epss_score": float(epss_results[cve_id].get("epss_score", 0.0)),
-                    "collected_at": epss_results[cve_id]
-                    .get("collected_at", datetime.utcnow())
-                    .isoformat(),
-                },
-                "cvss": {
-                    "cvss_score": float(cvss_results[cve_id].get("cvss_score", 0.0)),
-                    "vector": cvss_results[cve_id].get("vector"),
-                    "collected_at": cvss_results[cve_id]
-                    .get("collected_at", datetime.utcnow())
-                    .isoformat(),
-                },
-                "cases": serialized_cases,
-                "analysis": {
-                    **analysis_output.dict(),
-                    "generated_at": analysis_output.generated_at.isoformat(),
-                },
-            }
-        )
-
-    return {
-        "package": package_payload.package,
-        "version_range": package_payload.version_range,
-        "generated_at": datetime.utcnow().isoformat(),
-        "results": pipeline_results,
-    }
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
