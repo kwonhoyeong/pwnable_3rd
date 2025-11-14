@@ -15,11 +15,11 @@ logger = get_logger(__name__)
 class GPT5Client(IAIClient):
     """GPT-5 API 래퍼(Wrapper for GPT-5 API)."""
 
-    def __init__(self, base_url: str = "https://api.openai.com/v1") -> None:
+    def __init__(self, base_url: str = "https://api.openai.com/v1", timeout: float = 30.0) -> None:
         settings = get_settings()
         self._base_url = base_url
         self._api_key = settings.gpt5_api_key
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._timeout = timeout
 
     async def chat(self, prompt: str, **kwargs: Any) -> str:
         """GPT-5 채팅 호출(Invoke GPT-5 chat)."""
@@ -27,14 +27,14 @@ class GPT5Client(IAIClient):
         headers = {"Authorization": f"Bearer {self._api_key}"}
         payload = {"prompt": prompt, **kwargs}
         try:
-            response = await self._client.post(
-                f"{self._base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                follow_redirects=True,
-            )
-            response.raise_for_status()
-            data = response.json()
+            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
+                response = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
             choices = data.get("choices", [])
             if choices:
                 return choices[0].get("message", {}).get("content", "")
@@ -53,4 +53,3 @@ class GPT5Client(IAIClient):
 
         response_text = await self.chat(prompt, schema=schema)
         return {"raw": response_text}
-

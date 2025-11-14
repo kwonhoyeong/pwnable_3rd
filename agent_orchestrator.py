@@ -6,14 +6,20 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional
 
 from analyzer.app.models import AnalyzerInput, AnalyzerOutput
+from analyzer.app.repository import AnalysisRepository
 from analyzer.app.service import AnalyzerService
 from common_lib.cache import AsyncCache
+from common_lib.db import get_session
 from common_lib.logger import get_logger
+from cvss_fetcher.app.repository import CVSSRepository
 from cvss_fetcher.app.service import CVSSService
+from epss_fetcher.app.repository import EPSSRepository
 from epss_fetcher.app.service import EPSSService
 from mapping_collector.app.models import PackageInput
+from mapping_collector.app.repository import MappingRepository
 from mapping_collector.app.service import MappingService
 from threat_agent.app.models import ThreatCase, ThreatInput, ThreatResponse
+from threat_agent.app.repository import ThreatRepository
 from threat_agent.app.services import ThreatAggregationService
 
 ProgressCallback = Callable[[str, str], None]
@@ -86,6 +92,17 @@ def _normalize_timestamp(value: Any) -> str:
     return datetime.utcnow().isoformat()
 
 
+def _ensure_datetime(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            logger.warning("Invalid datetime format encountered: %s", value)
+    return datetime.utcnow()
+
+
 class AgentOrchestrator:
     """단계별 에이전트를 조율하는 오케스트레이터."""
 
@@ -116,77 +133,123 @@ class AgentOrchestrator:
             collected_at=datetime.utcnow(),
         )
 
-        cve_ids = await self._mapping_agent(
-            mapping_service, package_payload, force, progress_cb
-        )
-        if not cve_ids:
-            cve_ids = _fallback_cves(package_payload.package)
-
-        epss_results, cvss_results = await asyncio.gather(
-            self._epss_agent(epss_service, cve_ids, package_payload, force, progress_cb),
-            self._cvss_agent(cvss_service, cve_ids, package_payload, force, progress_cb),
-        )
-
         pipeline_results: List[Dict[str, Any]] = []
-        for cve_id in cve_ids:
-            threat_payload = ThreatInput(
-                cve_id=cve_id,
-                package=package_payload.package,
-                version_range=package_payload.version_range,
+        async with get_session() as session:
+            mapping_repo = MappingRepository(session)
+            epss_repo = EPSSRepository(session)
+            cvss_repo = CVSSRepository(session)
+            threat_repo = ThreatRepository(session)
+            analysis_repo = AnalysisRepository(session)
+
+            cve_ids = await self._mapping_agent(
+                mapping_service, package_payload, force, progress_cb
             )
-            threat_response = await self._threat_agent(
-                threat_service,
-                threat_payload,
-                skip_threat_agent,
-                force,
-                progress_cb,
+            if not cve_ids:
+                cve_ids = _fallback_cves(package_payload.package)
+
+            await mapping_repo.upsert_mapping(
+                package_payload.package, package_payload.version_range, cve_ids
+            )
+            await session.commit()
+
+            epss_results, cvss_results = await asyncio.gather(
+                self._epss_agent(epss_service, cve_ids, package_payload, force, progress_cb),
+                self._cvss_agent(cvss_service, cve_ids, package_payload, force, progress_cb),
             )
 
-            analysis_output = await self._analysis_agent(
-                analyzer_service,
-                threat_payload,
-                epss_results[cve_id],
-                cvss_results[cve_id],
-                threat_response,
-                force,
-                progress_cb,
-            )
-
-            serialized_cases: List[Dict[str, Any]] = []
-            for case in threat_response.cases:
-                case_payload = case.dict()
-                case_payload["collected_at"] = _normalize_timestamp(
-                    case_payload.get("collected_at")
+            for cve_id in cve_ids:
+                epss_record = epss_results[cve_id]
+                await epss_repo.upsert_score(
+                    cve_id,
+                    float(epss_record.get("epss_score", 0.0)),
+                    _ensure_datetime(epss_record.get("collected_at")),
                 )
-                serialized_cases.append(case_payload)
 
-            pipeline_results.append(
-                {
-                    "package": package_payload.package,
-                    "version_range": package_payload.version_range,
-                    "cve_id": cve_id,
-                    "epss": {
-                        "epss_score": float(epss_results[cve_id].get("epss_score", 0.0)),
-                        "collected_at": _normalize_timestamp(
-                            epss_results[cve_id].get("collected_at")
-                        ),
-                    },
-                    "cvss": {
-                        "cvss_score": float(cvss_results[cve_id].get("cvss_score", 0.0)),
-                        "vector": cvss_results[cve_id].get("vector"),
-                        "collected_at": _normalize_timestamp(
-                            cvss_results[cve_id].get("collected_at")
-                        ),
-                    },
-                    "cases": serialized_cases,
-                    "analysis": {
-                        **analysis_output.dict(),
-                        "generated_at": _normalize_timestamp(
-                            analysis_output.generated_at
-                        ),
-                    },
-                }
-            )
+            for cve_id in cve_ids:
+                cvss_record = cvss_results[cve_id]
+                await cvss_repo.upsert_score(
+                    cve_id,
+                    float(cvss_record.get("cvss_score", 0.0)),
+                    cvss_record.get("vector"),
+                    _ensure_datetime(cvss_record.get("collected_at")),
+                )
+            await session.commit()
+
+            for cve_id in cve_ids:
+                threat_payload = ThreatInput(
+                    cve_id=cve_id,
+                    package=package_payload.package,
+                    version_range=package_payload.version_range,
+                )
+                threat_response = await self._threat_agent(
+                    threat_service,
+                    threat_payload,
+                    skip_threat_agent,
+                    force,
+                    progress_cb,
+                )
+
+                await threat_repo.upsert_cases(
+                    threat_payload.cve_id,
+                    threat_payload.package,
+                    threat_payload.version_range,
+                    [case.dict() for case in threat_response.cases],
+                )
+
+                analysis_output = await self._analysis_agent(
+                    analyzer_service,
+                    threat_payload,
+                    epss_results[cve_id],
+                    cvss_results[cve_id],
+                    threat_response,
+                    force,
+                    progress_cb,
+                )
+
+                await analysis_repo.upsert_analysis(
+                    cve_id=analysis_output.cve_id,
+                    risk_level=analysis_output.risk_level,
+                    recommendations=analysis_output.recommendations,
+                    analysis_summary=analysis_output.analysis_summary,
+                    generated_at=_ensure_datetime(analysis_output.generated_at),
+                )
+                await session.commit()
+
+                serialized_cases: List[Dict[str, Any]] = []
+                for case in threat_response.cases:
+                    case_payload = case.dict()
+                    case_payload["collected_at"] = _normalize_timestamp(
+                        case_payload.get("collected_at")
+                    )
+                    serialized_cases.append(case_payload)
+
+                pipeline_results.append(
+                    {
+                        "package": package_payload.package,
+                        "version_range": package_payload.version_range,
+                        "cve_id": cve_id,
+                        "epss": {
+                            "epss_score": float(epss_results[cve_id].get("epss_score", 0.0)),
+                            "collected_at": _normalize_timestamp(
+                                epss_results[cve_id].get("collected_at")
+                            ),
+                        },
+                        "cvss": {
+                            "cvss_score": float(cvss_results[cve_id].get("cvss_score", 0.0)),
+                            "vector": cvss_results[cve_id].get("vector"),
+                            "collected_at": _normalize_timestamp(
+                                cvss_results[cve_id].get("collected_at")
+                            ),
+                        },
+                        "cases": serialized_cases,
+                        "analysis": {
+                            **analysis_output.dict(),
+                            "generated_at": _normalize_timestamp(
+                                analysis_output.generated_at
+                            ),
+                        },
+                    }
+                )
 
         return {
             "package": package_payload.package,
@@ -206,7 +269,7 @@ class AgentOrchestrator:
         cached: Optional[List[str]] = None
         if not force:
             cached = await self._cache.get(cache_key)
-            if cached:
+            if cached is not None:
                 progress_cb("MAPPING", "캐시 적중, CVE 목록 재사용(Cache hit for CVEs)")
                 return cached
 
@@ -233,7 +296,7 @@ class AgentOrchestrator:
         cache_key = f"epss:{package_payload.package}:{package_payload.version_range}"
         if not force:
             cached = await self._cache.get(cache_key)
-            if cached:
+            if cached is not None:
                 progress_cb("EPSS", "캐시 적중, EPSS 데이터 재사용(Cache hit for EPSS)")
                 return cached
 
@@ -261,7 +324,7 @@ class AgentOrchestrator:
         cache_key = f"cvss:{package_payload.package}:{package_payload.version_range}"
         if not force:
             cached = await self._cache.get(cache_key)
-            if cached:
+            if cached is not None:
                 progress_cb("CVSS", "캐시 적중, CVSS 데이터 재사용(Cache hit for CVSS)")
                 return cached
 
@@ -298,7 +361,7 @@ class AgentOrchestrator:
 
         if not force:
             cached = await self._cache.get(cache_key)
-            if cached:
+            if cached is not None:
                 progress_cb("THREAT", "캐시 적중, 위협 사례 재사용(Cache hit for threat cases)")
                 return ThreatResponse(**cached)
 
@@ -329,7 +392,7 @@ class AgentOrchestrator:
 
         if not force:
             cached = await self._cache.get(cache_key)
-            if cached:
+            if cached is not None:
                 progress_cb("ANALYZE", "캐시 적중, 분석 결과 재사용(Cache hit for analysis)")
                 return AnalyzerOutput(**cached)
 
@@ -352,4 +415,3 @@ class AgentOrchestrator:
 
         await self._cache.set(cache_key, analysis_output.dict())
         return analysis_output
-

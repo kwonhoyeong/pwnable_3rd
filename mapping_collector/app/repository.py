@@ -30,10 +30,27 @@ class MappingRepository:
         )
         await self._session.execute(query, {"package": package, "version_range": version_range, "cve_ids": cve_ids})
 
-    async def list_pending_packages(self) -> List[str]:
+    async def list_pending_packages(self) -> List[dict[str, object]]:
         """수집 대기 패키지 목록(Look up pending packages)."""
 
-        query = text("SELECT package FROM package_scan_queue WHERE processed = false")
+        query = text(
+            """
+            SELECT id, package, version_range
+            FROM package_scan_queue
+            WHERE processed = false
+            ORDER BY created_at ASC
+            FOR UPDATE SKIP LOCKED
+            """
+        )
         result = await self._session.execute(query)
-        return [row[0] for row in result.fetchall()]
+        rows = result.fetchall()
+        return [
+            {"id": row.id, "package": row.package, "version_range": row.version_range}
+            for row in rows
+        ]
 
+    async def mark_processed(self, queue_id: int) -> None:
+        """큐 항목 처리 완료 표시(Mark queue entry as processed)."""
+
+        query = text("UPDATE package_scan_queue SET processed = true WHERE id = :queue_id")
+        await self._session.execute(query, {"queue_id": queue_id})
