@@ -42,15 +42,17 @@ class MappingScheduler:
 
         async with get_session() as session:
             repository = MappingRepository(session)
-            pending_packages = await repository.list_pending_packages()
-            for package_name in pending_packages:
-                cve_ids = await self._service.fetch_cves(package_name, "latest")
+            pending_jobs = await repository.list_pending_packages()
+            for job in pending_jobs:
+                package_name = str(job["package"])
+                version_range = str(job["version_range"])
+                cve_ids = await self._service.fetch_cves(package_name, version_range)
                 mapping = PackageMapping(
                     package=package_name,
-                    version_range="latest",
+                    version_range=version_range,
                     cve_ids=cve_ids,
                     collected_at=datetime.utcnow(),
                 )
                 await repository.upsert_mapping(mapping.package, mapping.version_range, mapping.cve_ids)
+                await repository.mark_processed(int(job["id"]))
             await session.commit()
-

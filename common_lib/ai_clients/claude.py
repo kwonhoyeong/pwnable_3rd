@@ -15,11 +15,11 @@ logger = get_logger(__name__)
 class ClaudeClient(IAIClient):
     """Claude API 래퍼(Wrapper for Claude API)."""
 
-    def __init__(self, base_url: str = "https://api.anthropic.com/v1") -> None:
+    def __init__(self, base_url: str = "https://api.anthropic.com/v1", timeout: float = 30.0) -> None:
         settings = get_settings()
         self._base_url = base_url
         self._api_key = settings.claude_api_key
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._timeout = timeout
 
     async def chat(self, prompt: str, **kwargs: Any) -> str:
         """Claude 채팅 호출(Invoke Claude chat)."""
@@ -27,14 +27,14 @@ class ClaudeClient(IAIClient):
         headers = {"x-api-key": self._api_key}
         payload = {"prompt": prompt, **kwargs}
         try:
-            response = await self._client.post(
-                f"{self._base_url}/messages",
-                headers=headers,
-                json=payload,
-                follow_redirects=True,
-            )
-            response.raise_for_status()
-            data = response.json()
+            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
+                response = await client.post(
+                    f"{self._base_url}/messages",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
             return data.get("completion", "")
         except httpx.HTTPStatusError as exc:  # pragma: no cover - skeleton fallback
             logger.warning("Claude API HTTP 오류(HTTP error): %s", exc)
@@ -50,4 +50,3 @@ class ClaudeClient(IAIClient):
 
         response_text = await self.chat(prompt, schema=schema)
         return {"raw": response_text}
-
