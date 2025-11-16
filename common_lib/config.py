@@ -26,6 +26,11 @@ class Settings(BaseSettings):
         description="PostgreSQL 연결 DSN(PostgreSQL connection DSN)",
     )
     redis_url: str = Field(default="redis://localhost:6379/0", description="Redis 접속 URL(Redis connection URL)")
+    cache_ttl_seconds: int | None = Field(
+        default=3600,
+        env="CACHE_TTL_SECONDS",
+        description="Redis 캐시 TTL(Redis cache TTL in seconds)",
+    )
     kafka_bootstrap_servers: str = Field(
         default="kafka:9092",
         description="Kafka 부트스트랩 서버(Kafka bootstrap servers)",
@@ -51,4 +56,3 @@ def load_environment() -> None:
     """기본 환경변수를 로드(Load base environment variables)."""
 
     os.environ.setdefault("TZ", "UTC")
-
