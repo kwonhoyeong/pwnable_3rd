@@ -1,15 +1,31 @@
 """ThreatAgent 데이터 저장소(ThreatAgent data repository)."""
 from __future__ import annotations
 
-from datetime import datetime
-from typing import List
+import json
+from typing import Any, List
 
+from pydantic.json import pydantic_encoder
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common_lib.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _serialize_case_for_jsonb(case: dict[str, Any]) -> dict[str, Any]:
+    """
+    Convert a threat case dict to a JSON-serializable format for JSONB storage.
+
+    Uses Pydantic's encoder to recursively handle all Pydantic types including:
+    - HttpUrl objects -> str
+    - datetime objects -> ISO-8601 string
+    - Nested structures with Pydantic types
+    - Other special types (UUID, Decimal, etc.)
+    """
+    # Use Pydantic's encoder and parse back to ensure full JSON compatibility
+    # This handles all Pydantic types recursively and robustly
+    return json.loads(json.dumps(case, default=pydantic_encoder))
 
 
 class ThreatRepository:
@@ -22,6 +38,10 @@ class ThreatRepository:
         self, cve_id: str, package: str, version_range: str, cases: List[dict[str, object]]
     ) -> None:
         """사례 정보를 저장/갱신(Store or update collected cases)."""
+
+        # Serialize cases to JSON-safe format for JSONB storage
+        # This handles HttpUrl -> str and datetime -> ISO-8601 conversion
+        serialized_cases = [_serialize_case_for_jsonb(case) for case in cases]
 
         query = text(
             """
@@ -37,7 +57,7 @@ class ThreatRepository:
                 "cve_id": cve_id,
                 "package": package,
                 "version_range": version_range,
-                "cases": cases,
+                "cases": serialized_cases,
             },
         )
 
