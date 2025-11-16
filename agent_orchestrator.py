@@ -156,6 +156,7 @@ class AgentOrchestrator:
                     )
                     await session.commit()
                 except Exception as exc:
+                    await session.rollback()
                     logger.warning("Failed to persist mapping to DB: %s", exc)
 
             epss_results, cvss_results = await asyncio.gather(
@@ -174,6 +175,7 @@ class AgentOrchestrator:
                             _ensure_datetime(epss_record.get("collected_at")),
                         )
                 except Exception as exc:
+                    await session.rollback()
                     logger.warning("Failed to persist EPSS to DB: %s", exc)
 
             if session and cvss_repo:
@@ -188,6 +190,7 @@ class AgentOrchestrator:
                         )
                     await session.commit()
                 except Exception as exc:
+                    await session.rollback()
                     logger.warning("Failed to persist CVSS to DB: %s", exc)
 
             for cve_id in cve_ids:
@@ -214,6 +217,7 @@ class AgentOrchestrator:
                             [case.dict() for case in threat_response.cases],
                         )
                     except Exception as exc:
+                        await session.rollback()
                         logger.warning("Failed to persist threat cases to DB: %s", exc)
 
                 analysis_output = await self._analysis_agent(
@@ -238,6 +242,7 @@ class AgentOrchestrator:
                         )
                         await session.commit()
                     except Exception as exc:
+                        await session.rollback()
                         logger.warning("Failed to persist analysis to DB: %s", exc)
 
                 serialized_cases: List[Dict[str, Any]] = []
