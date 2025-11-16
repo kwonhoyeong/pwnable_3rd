@@ -135,11 +135,12 @@ class AgentOrchestrator:
 
         pipeline_results: List[Dict[str, Any]] = []
         async with get_session() as session:
-            mapping_repo = MappingRepository(session)
-            epss_repo = EPSSRepository(session)
-            cvss_repo = CVSSRepository(session)
-            threat_repo = ThreatRepository(session)
-            analysis_repo = AnalysisRepository(session)
+            # Initialize repositories only if session is available
+            mapping_repo = MappingRepository(session) if session else None
+            epss_repo = EPSSRepository(session) if session else None
+            cvss_repo = CVSSRepository(session) if session else None
+            threat_repo = ThreatRepository(session) if session else None
+            analysis_repo = AnalysisRepository(session) if session else None
 
             cve_ids = await self._mapping_agent(
                 mapping_service, package_payload, force, progress_cb
@@ -147,33 +148,47 @@ class AgentOrchestrator:
             if not cve_ids:
                 cve_ids = _fallback_cves(package_payload.package)
 
-            await mapping_repo.upsert_mapping(
-                package_payload.package, package_payload.version_range, cve_ids
-            )
-            await session.commit()
+            # Only persist to DB if session is available
+            if session and mapping_repo:
+                try:
+                    await mapping_repo.upsert_mapping(
+                        package_payload.package, package_payload.version_range, cve_ids
+                    )
+                    await session.commit()
+                except Exception as exc:
+                    logger.warning("Failed to persist mapping to DB: %s", exc)
 
             epss_results, cvss_results = await asyncio.gather(
                 self._epss_agent(epss_service, cve_ids, package_payload, force, progress_cb),
                 self._cvss_agent(cvss_service, cve_ids, package_payload, force, progress_cb),
             )
 
-            for cve_id in cve_ids:
-                epss_record = epss_results[cve_id]
-                await epss_repo.upsert_score(
-                    cve_id,
-                    float(epss_record.get("epss_score", 0.0)),
-                    _ensure_datetime(epss_record.get("collected_at")),
-                )
+            # Only persist to DB if session is available
+            if session and epss_repo:
+                try:
+                    for cve_id in cve_ids:
+                        epss_record = epss_results[cve_id]
+                        await epss_repo.upsert_score(
+                            cve_id,
+                            float(epss_record.get("epss_score", 0.0)),
+                            _ensure_datetime(epss_record.get("collected_at")),
+                        )
+                except Exception as exc:
+                    logger.warning("Failed to persist EPSS to DB: %s", exc)
 
-            for cve_id in cve_ids:
-                cvss_record = cvss_results[cve_id]
-                await cvss_repo.upsert_score(
-                    cve_id,
-                    float(cvss_record.get("cvss_score", 0.0)),
-                    cvss_record.get("vector"),
-                    _ensure_datetime(cvss_record.get("collected_at")),
-                )
-            await session.commit()
+            if session and cvss_repo:
+                try:
+                    for cve_id in cve_ids:
+                        cvss_record = cvss_results[cve_id]
+                        await cvss_repo.upsert_score(
+                            cve_id,
+                            float(cvss_record.get("cvss_score", 0.0)),
+                            cvss_record.get("vector"),
+                            _ensure_datetime(cvss_record.get("collected_at")),
+                        )
+                    await session.commit()
+                except Exception as exc:
+                    logger.warning("Failed to persist CVSS to DB: %s", exc)
 
             for cve_id in cve_ids:
                 threat_payload = ThreatInput(
@@ -189,12 +204,17 @@ class AgentOrchestrator:
                     progress_cb,
                 )
 
-                await threat_repo.upsert_cases(
-                    threat_payload.cve_id,
-                    threat_payload.package,
-                    threat_payload.version_range,
-                    [case.dict() for case in threat_response.cases],
-                )
+                # Only persist to DB if session is available
+                if session and threat_repo:
+                    try:
+                        await threat_repo.upsert_cases(
+                            threat_payload.cve_id,
+                            threat_payload.package,
+                            threat_payload.version_range,
+                            [case.dict() for case in threat_response.cases],
+                        )
+                    except Exception as exc:
+                        logger.warning("Failed to persist threat cases to DB: %s", exc)
 
                 analysis_output = await self._analysis_agent(
                     analyzer_service,
@@ -206,18 +226,32 @@ class AgentOrchestrator:
                     progress_cb,
                 )
 
-                await analysis_repo.upsert_analysis(
-                    cve_id=analysis_output.cve_id,
-                    risk_level=analysis_output.risk_level,
-                    recommendations=analysis_output.recommendations,
-                    analysis_summary=analysis_output.analysis_summary,
-                    generated_at=_ensure_datetime(analysis_output.generated_at),
-                )
-                await session.commit()
+                # Only persist to DB if session is available
+                if session and analysis_repo:
+                    try:
+                        await analysis_repo.upsert_analysis(
+                            cve_id=analysis_output.cve_id,
+                            risk_level=analysis_output.risk_level,
+                            recommendations=analysis_output.recommendations,
+                            analysis_summary=analysis_output.analysis_summary,
+                            generated_at=_ensure_datetime(analysis_output.generated_at),
+                        )
+                        await session.commit()
+                    except Exception as exc:
+                        logger.warning("Failed to persist analysis to DB: %s", exc)
 
                 serialized_cases: List[Dict[str, Any]] = []
                 for case in threat_response.cases:
-                    case_payload = case.dict()
+                    # Use model_dump for Pydantic v2 compatibility with mode='json' to serialize HttpUrl
+                    if hasattr(case, 'model_dump'):
+                        case_payload = case.model_dump(mode='json')
+                    else:
+                        # Fallback for Pydantic v1
+                        case_payload = case.dict()
+                        # Manually convert HttpUrl to string
+                        if 'source' in case_payload and hasattr(case_payload['source'], '__str__'):
+                            case_payload['source'] = str(case_payload['source'])
+
                     case_payload["collected_at"] = _normalize_timestamp(
                         case_payload.get("collected_at")
                     )

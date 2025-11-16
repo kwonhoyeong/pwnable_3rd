@@ -15,32 +15,52 @@ _engine: AsyncEngine | None = None
 _session_factory: sessionmaker | None = None
 
 
-async def get_engine() -> AsyncEngine:
-    """비동기 엔진 제공(Provide async engine)."""
+async def get_engine() -> AsyncEngine | None:
+    """비동기 엔진 제공(Provide async engine). Returns None if DB is unavailable."""
 
     global _engine
     if _engine is None:
         settings = get_settings()
         logger.info("Initializing async engine")
-        _engine = create_async_engine(settings.postgres_dsn, future=True, echo=False)
+        try:
+            _engine = create_async_engine(settings.postgres_dsn, future=True, echo=False)
+        except Exception as exc:
+            logger.warning("Failed to create database engine, continuing without DB: %s", exc)
+            return None
     return _engine
 
 
 @asynccontextmanager
-async def get_session() -> AsyncIterator[AsyncSession]:
-    """세션 컨텍스트 관리자(Session context manager)."""
+async def get_session() -> AsyncIterator[AsyncSession | None]:
+    """세션 컨텍스트 관리자(Session context manager). Returns None if DB is unavailable."""
 
     global _session_factory
-    if _session_factory is None:
-        engine = await get_engine()
-        _session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    session = _session_factory()
+    engine = None
+    session = None
+
     try:
+        if _session_factory is None:
+            engine = await get_engine()
+            if engine is None:
+                logger.warning("Database not available, continuing without DB persistence")
+                yield None
+                return
+            _session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+        session = _session_factory()
         yield session
     except Exception as exc:  # pragma: no cover - skeleton
-        await session.rollback()
-        logger.exception("Database session error", exc_info=exc)
-        raise
+        if session is not None:
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+        logger.warning("Database session error, continuing without DB: %s", exc)
+        # Don't raise - allow pipeline to continue without DB
     finally:
-        await session.close()
+        if session is not None:
+            try:
+                await session.close()
+            except Exception:
+                pass
 
