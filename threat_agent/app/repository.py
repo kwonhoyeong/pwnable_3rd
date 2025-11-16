@@ -5,7 +5,8 @@ import json
 from typing import Any, List
 
 from pydantic.json import pydantic_encoder
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common_lib.logger import get_logger
@@ -43,6 +44,8 @@ class ThreatRepository:
         # This handles HttpUrl -> str and datetime -> ISO-8601 conversion
         serialized_cases = [_serialize_case_for_jsonb(case) for case in cases]
 
+        # Explicitly bind 'cases' parameter as JSONB to ensure asyncpg handles it correctly
+        # Without this, SQLAlchemy treats it as TEXT and asyncpg fails with 'list has no encode'
         query = text(
             """
             INSERT INTO threat_cases (cve_id, package, version_range, cases)
@@ -50,7 +53,8 @@ class ThreatRepository:
             ON CONFLICT (cve_id, package, version_range)
             DO UPDATE SET cases = EXCLUDED.cases, updated_at = NOW()
             """
-        )
+        ).bindparams(bindparam("cases", type_=JSONB))
+
         await self._session.execute(
             query,
             {
