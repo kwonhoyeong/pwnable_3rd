@@ -6,8 +6,13 @@ import asyncio
 import json
 from typing import Any, Callable, Dict, Iterable, Optional
 
+from dotenv import load_dotenv
+
 from agent_orchestrator import AgentOrchestrator, ProgressCallback
 from common_lib.logger import get_logger
+
+# Load .env file at startup
+load_dotenv()
 
 logger = get_logger(__name__)
 
