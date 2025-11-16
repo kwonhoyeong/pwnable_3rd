@@ -55,8 +55,19 @@ async def get_session() -> AsyncIterator[AsyncSession | None]:
                 await session.rollback()
             except Exception:
                 pass
-        logger.warning("Database session error, continuing without DB: %s", exc)
-        # Don't raise - allow pipeline to continue without DB
+
+        # Only suppress DB connection/authentication errors for CLI testing
+        # Re-raise other errors so business logic bugs are not hidden
+        import asyncpg
+        from sqlalchemy.exc import OperationalError, DBAPIError
+
+        if isinstance(exc, (asyncpg.exceptions.PostgresError, OperationalError, DBAPIError)):
+            logger.warning("Database connection error, continuing without DB: %s", exc)
+            # Allow pipeline to continue without DB for testing
+        else:
+            # Re-raise business logic errors
+            logger.error("Session error (not a DB connection issue): %s", exc)
+            raise
     finally:
         if session is not None:
             try:
