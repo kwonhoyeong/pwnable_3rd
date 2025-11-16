@@ -9,14 +9,32 @@ cd npm-threat-evaluator
 ```
 
 ### 2. 환경 변수 설정
-```
+```bash
 cp .env.example .env
 ```
 
-`.env` 파일을 열어서 다음 항목만 수정:
+`.env` 파일을 열어서 다음 항목 수정:
 - `NT_PERPLEXITY_API_KEY`: 본인의 Perplexity API 키
 - `NT_CLAUDE_API_KEY`: 본인의 Claude API 키
-- `NT_GPT5_API_KEY`: 본인의 GPT-5 API 키
+- **`NT_GPT5_API_KEY`**: 본인의 OpenAI API 키 **(REQUIRED for GPT-based analysis)**
+
+**⚠️ API 키 누락 시 동작:**
+- `NT_GPT5_API_KEY`가 설정되지 않은 경우:
+  - 시스템이 정상적으로 실행되지만 GPT 분석은 실패합니다
+  - 로그에 명확한 에러 메시지가 출력됩니다:
+    ```
+    ERROR - NT_GPT5_API_KEY is not set or empty. GPT-5 analysis will fail and use fallback responses.
+    ```
+  - 분석 결과에 fallback 메시지가 포함됩니다:
+    ```json
+    "analysis_summary": "AI 분석 실패로 수동 검토 필요(Manual review required due to AI failure)."
+    ```
+  - 파이프라인은 중단되지 않고 계속 실행됩니다
+
+- 잘못된 API 키를 입력한 경우:
+  - GPT API 호출이 401 (Unauthorized) 또는 400 (Bad Request) 에러를 반환합니다
+  - 로그에 상세한 에러 정보가 기록됩니다 (HTTP status code, error body 등)
+  - Fallback 분석 결과가 사용됩니다
 
 ### 3. Docker 실행
 ```

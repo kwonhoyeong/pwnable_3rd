@@ -27,22 +27,58 @@
 3. `cp .env.example .env` 후 AI API 키와 데이터베이스/캐시 DSN을 설정
 4. (선택 사항) `npm install` inside `web_frontend/`
 
+## Environment Configuration (.env file)
+
+**REQUIRED**: You must create a `.env` file in the project root with the following variables:
+
+```dotenv
+# Database & Cache
+NT_POSTGRES_DSN=postgresql+asyncpg://<user>:<password>@localhost:5432/threatdb
+NT_REDIS_URL=redis://localhost:6379/0
+
+# AI API Keys (at least one is required for GPT-based analysis)
+NT_GPT5_API_KEY=sk-REPLACE_WITH_YOUR_OPENAI_API_KEY
+NT_PERPLEXITY_API_KEY=your-perplexity-key-here
+NT_CLAUDE_API_KEY=your-claude-key-here
+```
+
+### ⚠️ Important Notes on API Keys
+
+- **`NT_GPT5_API_KEY` is required for AI-powered vulnerability analysis.**
+  - If this key is **missing or invalid**, the system will:
+    - Log a clear ERROR message at startup: `"NT_GPT5_API_KEY is not set or empty"`
+    - Skip GPT API calls and use fallback analysis with the message:
+      ```
+      "AI 분석 실패로 수동 검토 필요(Manual review required due to AI failure)."
+      ```
+  - The pipeline will still complete successfully, but analysis quality will be limited.
+
+- **Authentication errors (401/400)**: Check your API key validity if you see these errors in logs.
+
 ## Run main.py locally
 1. PostgreSQL과 Redis를 실행하세요(Start PostgreSQL & Redis).
    - PostgreSQL에서 `threatdb` 데이터베이스를 만든 후 각 모듈의 `db/schema.sql`을 순서대로 실행합니다(`psql -f mapping_collector/db/schema.sql` 등).
    - Redis는 기본 포트(6379)로 실행하면 됩니다.
-2. `.env` 파일에 아래와 같이 접속 정보를 채웁니다(Fill in connection details).
-   ```dotenv
-   NT_POSTGRES_DSN=postgresql+asyncpg://<user>:<password>@localhost:5432/threatdb
-   NT_REDIS_URL=redis://localhost:6379/0
-   ```
+2. `.env` 파일에 위와 같이 접속 정보와 API 키를 설정합니다(Fill in connection details and API keys).
 3. 가상환경을 활성화한 상태에서 `python3 main.py --package lodash` 명령을 실행하면 파이프라인이 동작합니다.
 
 ## Quick Start
 ```bash
 # 가장 빠르게 전체 시스템 실행하는 방법
 python3 main.py --package lodash
+
+# Force fresh GPT-based analysis (bypass cache)
+python3 main.py --package lodash --force
+
+# Skip threat agent collection
+python3 main.py --package lodash --skip-threat-agent
 ```
+
+### CLI Options
+- `--package`: (Required) Target npm package name
+- `--version-range`: (Optional) Version range to analyze (default: "latest")
+- `--force`: Bypass all caches and force fresh API calls (including GPT analysis)
+- `--skip-threat-agent`: Skip threat case collection and use fallback data
 
 ## Helper Script (`run_pipeline.sh`)
 ```bash
