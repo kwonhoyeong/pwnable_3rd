@@ -21,11 +21,32 @@ class GPT5Client(IAIClient):
         self._api_key = settings.gpt5_api_key
         self._timeout = timeout
 
+        # Validate API key at initialization
+        if not self._api_key or self._api_key.strip() == "":
+            logger.error(
+                "NT_GPT5_API_KEY is not set or empty. "
+                "GPT-5 analysis will fail and use fallback responses. "
+                "Please set NT_GPT5_API_KEY in your .env file."
+            )
+
     async def chat(self, prompt: str, **kwargs: Any) -> str:
         """GPT-5 채팅 호출(Invoke GPT-5 chat)."""
 
+        # Check API key before making request
+        if not self._api_key or self._api_key.strip() == "":
+            logger.warning(
+                "NT_GPT5_API_KEY is missing or empty; skipping GPT-5 API call and using fallback analysis."
+            )
+            raise RuntimeError("NT_GPT5_API_KEY is not configured")
+
         headers = {"Authorization": f"Bearer {self._api_key}"}
         payload = {"prompt": prompt, **kwargs}
+
+        logger.debug(
+            "Making GPT-5 API request to %s/chat/completions",
+            self._base_url
+        )
+
         try:
             async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
                 response = await client.post(
@@ -37,15 +58,44 @@ class GPT5Client(IAIClient):
                 data = response.json()
             choices = data.get("choices", [])
             if choices:
+                logger.info("GPT-5 API call succeeded")
                 return choices[0].get("message", {}).get("content", "")
+            logger.warning("GPT-5 API returned empty choices")
             return ""
         except httpx.HTTPStatusError as exc:  # pragma: no cover - skeleton fallback
-            logger.warning("GPT-5 API HTTP 오류(HTTP error): %s", exc)
-            logger.debug("GPT-5 failure details", exc_info=exc)
-            raise RuntimeError(f"GPT-5 API HTTP error: {exc}") from exc
+            status_code = exc.response.status_code
+            try:
+                error_body = exc.response.text
+            except Exception:
+                error_body = "<unable to read response body>"
+
+            logger.error(
+                "GPT-5 API HTTP error: status=%d, endpoint=%s/chat/completions, error_body=%s",
+                status_code,
+                self._base_url,
+                error_body,
+                exc_info=True
+            )
+
+            if status_code == 401:
+                logger.error(
+                    "GPT-5 API authentication failed (401). "
+                    "Please check that NT_GPT5_API_KEY is valid."
+                )
+            elif status_code == 400:
+                logger.error(
+                    "GPT-5 API bad request (400). "
+                    "The request payload may be invalid or the API key may be incorrect."
+                )
+
+            raise RuntimeError(f"GPT-5 API HTTP error: status={status_code}, body={error_body}") from exc
         except httpx.HTTPError as exc:  # pragma: no cover - skeleton fallback
-            logger.warning("GPT-5 API 네트워크 오류(Network error): %s", exc)
-            logger.debug("GPT-5 failure details", exc_info=exc)
+            logger.error(
+                "GPT-5 API network error: endpoint=%s/chat/completions, error=%s",
+                self._base_url,
+                str(exc),
+                exc_info=True
+            )
             raise RuntimeError(f"GPT-5 API network error: {exc}") from exc
 
     async def structured_output(self, prompt: str, schema: Dict[str, Any]) -> Dict[str, Any]:
