@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional, cast
 
@@ -57,15 +56,13 @@ class AsyncCache:
     """Redis 기반 비동기 캐시(Async redis-backed cache helper)."""
 
     def __init__(self, namespace: str = "pipeline", ttl_seconds: Optional[int] = None) -> None:
-        env_ttl = os.getenv("CACHE_TTL_SECONDS")
-        resolved_ttl: Optional[int]
-        try:
-            resolved_ttl = int(env_ttl) if env_ttl else None
-        except ValueError:  # pragma: no cover - invalid user input
-            logger.warning("Invalid CACHE_TTL_SECONDS value: %s", env_ttl)
+        settings = get_settings()
+        resolved_ttl = ttl_seconds if ttl_seconds is not None else settings.cache_ttl_seconds
+        if resolved_ttl is not None and resolved_ttl <= 0:
+            logger.warning("Invalid cache_ttl_seconds value: %s", resolved_ttl)
             resolved_ttl = None
 
-        self._ttl_seconds = ttl_seconds if ttl_seconds is not None else resolved_ttl
+        self._ttl_seconds = resolved_ttl
         self._namespace = namespace
 
     @staticmethod
@@ -123,4 +120,3 @@ class AsyncCache:
             await redis_client.set(self._build_key(key), payload, ex=ttl_seconds)
         except Exception as exc:  # pragma: no cover - redis failure
             logger.warning("Redis error during set for %s", key, exc_info=exc)
-

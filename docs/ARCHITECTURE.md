@@ -122,8 +122,26 @@
    - HTML/제어 문자 제거, URL 검증, 길이 제한
    - XSS 공격 벡터 차단
 
+### Latest Fixes (2025-11-17)
+6. **Perplexity API Error Handling** (`common_lib/ai_clients/perplexity.py`)
+   - Fixed "Illegal header value b'Bearer '" error when API key is empty
+   - Added early warning at initialization for missing API key
+   - Maintains fallback mechanism compatibility
+
+7. **JSON Serialization Fix** (`agent_orchestrator.py`)
+   - Fixed "Object of type 'HttpUrl' is not JSON serializable" error
+   - Created centralized `_serialize_threat_case()` helper function
+   - Eliminated duplicate serialization logic (3 locations → 1 helper)
+   - Improved type checking for Pydantic HttpUrl objects
+
+8. **Code Quality Improvements** (Codex review recommendations)
+   - Centralized ThreatCase serialization logic to prevent drift
+   - Enhanced type checking for HttpUrl conversion
+   - Improved error messages and early failure detection
+
 ### Impact
 - **성능**: 캐시 히트율 향상, 불필요한 API 호출 감소
 - **안정성**: 리소스 누수 해결, 동시성 이슈 제거
 - **보안**: XSS 방지, 입력 검증 강화
 - **데이터 무결성**: DB 저장 보장, 큐 처리 정확도 향상
+- **코드 품질**: 중복 제거, 명확한 에러 메시지, 유지보수성 향상
