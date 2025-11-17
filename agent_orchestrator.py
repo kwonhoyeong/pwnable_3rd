@@ -103,6 +103,32 @@ def _ensure_datetime(value: Any) -> datetime:
     return datetime.utcnow()
 
 
+def _serialize_threat_case(case: ThreatCase) -> Dict[str, Any]:
+    """Centralized ThreatCase serialization helper to ensure consistent JSON output."""
+    try:
+        from pydantic import HttpUrl
+    except ImportError:
+        HttpUrl = None  # type: ignore
+
+    # Use model_dump for Pydantic v2 compatibility with mode='json' to serialize HttpUrl
+    if hasattr(case, 'model_dump'):
+        case_data = case.model_dump(mode='json')
+    else:
+        # Fallback for Pydantic v1
+        case_data = case.dict()
+        # Manually convert HttpUrl to string
+        if HttpUrl and isinstance(case_data.get('source'), HttpUrl):
+            case_data['source'] = str(case_data['source'])
+        elif 'source' in case_data and hasattr(case_data['source'], '__str__') and not isinstance(case_data['source'], str):
+            case_data['source'] = str(case_data['source'])
+
+    # Normalize timestamp
+    if 'collected_at' in case_data:
+        case_data['collected_at'] = _normalize_timestamp(case_data['collected_at'])
+
+    return case_data
+
+
 class AgentOrchestrator:
     """단계별 에이전트를 조율하는 오케스트레이터."""
 
@@ -210,11 +236,14 @@ class AgentOrchestrator:
                 # Only persist to DB if session is available
                 if session and threat_repo:
                     try:
+                        # Use centralized serialization helper
+                        serialized_db_cases = [_serialize_threat_case(case) for case in threat_response.cases]
+
                         await threat_repo.upsert_cases(
                             threat_payload.cve_id,
                             threat_payload.package,
                             threat_payload.version_range,
-                            [case.dict() for case in threat_response.cases],
+                            serialized_db_cases,
                         )
                     except Exception as exc:
                         await session.rollback()
@@ -245,22 +274,8 @@ class AgentOrchestrator:
                         await session.rollback()
                         logger.warning("Failed to persist analysis to DB: %s", exc)
 
-                serialized_cases: List[Dict[str, Any]] = []
-                for case in threat_response.cases:
-                    # Use model_dump for Pydantic v2 compatibility with mode='json' to serialize HttpUrl
-                    if hasattr(case, 'model_dump'):
-                        case_payload = case.model_dump(mode='json')
-                    else:
-                        # Fallback for Pydantic v1
-                        case_payload = case.dict()
-                        # Manually convert HttpUrl to string
-                        if 'source' in case_payload and hasattr(case_payload['source'], '__str__'):
-                            case_payload['source'] = str(case_payload['source'])
-
-                    case_payload["collected_at"] = _normalize_timestamp(
-                        case_payload.get("collected_at")
-                    )
-                    serialized_cases.append(case_payload)
+                # Use centralized serialization helper
+                serialized_cases = [_serialize_threat_case(case) for case in threat_response.cases]
 
                 pipeline_results.append(
                     {
