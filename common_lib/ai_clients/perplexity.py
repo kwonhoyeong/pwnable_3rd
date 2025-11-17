@@ -21,8 +21,16 @@ class PerplexityClient(IAIClient):
         self._api_key = settings.perplexity_api_key
         self._timeout = timeout
 
+        # Log warning at initialization for early visibility, but allow fallback mechanism
+        if not self._api_key or self._api_key.strip() == "":
+            logger.warning("Perplexity API 키가 설정되지 않음 - 폴백 모드로 실행됩니다(API key not set - will use fallback mode)")
+
     async def chat(self, prompt: str, **kwargs: Any) -> str:
         """Perplexity 검색 호출(Invoke Perplexity search)."""
+
+        # Check API key and raise error to trigger fallback mechanism
+        if not self._api_key or self._api_key.strip() == "":
+            raise RuntimeError("Perplexity API key is not configured")
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
         payload = {"query": prompt, **kwargs}

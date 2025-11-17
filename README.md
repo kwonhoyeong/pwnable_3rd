@@ -102,8 +102,35 @@ chmod +x run_pipeline.sh
 5. AnalyzerAgent → 위협·점수 데이터를 통합해 위험 등급/권고를 생성하고 캐시로 재사용합니다.
 6. QueryAPI/WebFrontend → Redis 캐시로 가속된 통합 결과를 사용자에게 노출합니다.
 
+## System Status
+
+### Working Features ✅
+- Multi-agent pipeline orchestration
+- CVE/CVSS/EPSS data collection with fallback mechanisms
+- Threat intelligence aggregation (when API keys configured)
+- AI-powered vulnerability analysis (when API keys configured)
+- PostgreSQL persistence with automatic failover to in-memory mode
+- Redis caching with graceful degradation when unavailable
+- Robust error handling and logging
+
+### Known Limitations
+- **Redis**: Optional - system works without it but with reduced performance
+- **PostgreSQL**: Optional - data persists in-memory if DB unavailable (warning logged)
+- **API Keys**: System runs with fallback data when keys are missing:
+  - Missing `NT_PERPLEXITY_API_KEY`: Uses fallback threat cases
+  - Missing `NT_GPT5_API_KEY`: Uses fallback analysis recommendations
+  - Missing external API access: Uses default EPSS/CVSS scores (0.0)
+
+### Recent Fixes (2025-11-17)
+- ✅ Fixed Perplexity API header error with empty API keys
+- ✅ Fixed JSON serialization error for Pydantic HttpUrl types
+- ✅ Centralized ThreatCase serialization to eliminate code duplication
+- ✅ Enhanced error messages and early failure detection
+- ✅ All code reviewed and improved via Codex
+
 ## Documentation
 - 더 자세한 내용은 `docs/ARCHITECTURE.md`, `docs/API.md` 참고
+- Recent improvements: See `docs/ARCHITECTURE.md` → "Latest Fixes (2025-11-17)"
 
 ## License
 - MIT License
