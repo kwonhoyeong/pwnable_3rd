@@ -26,6 +26,7 @@ from src.core.fallback import FallbackProvider
 from src.core.utils.timestamps import normalize_timestamp, ensure_datetime
 from src.core.persistence import PersistenceManager
 from src.core.serialization import serialize_threat_case, serialize_pipeline_result
+from src.core.agent_helpers import safe_call, build_cache_key, filter_missing_items
 
 ProgressCallback = Callable[[str, str], None]
 
@@ -33,22 +34,6 @@ logger = get_logger(__name__)
 
 # Use FallbackProvider for consistent fallback data generation
 _fallback_provider = FallbackProvider()
-
-
-async def _safe_call(
-    coro: Awaitable[Any],
-    fallback: Callable[[], Any],
-    step: str,
-    progress_cb: ProgressCallback,
-) -> Any:
-    """에이전트 호출 안전 래퍼."""
-
-    try:
-        return await coro
-    except Exception as exc:  # pragma: no cover - defensive logging
-        progress_cb(step, f"오류 발생, 대체 경로 사용(Error occurred, using fallback): {exc}")
-        logger.warning("%s 단계에서 예외 발생", step, exc_info=exc)
-        return fallback()
 
 
 def _resolve_epss_entry(results: Dict[str, Dict[str, Any]], cve_id: str) -> Dict[str, Any]:
@@ -210,7 +195,7 @@ class AgentOrchestrator:
                 return cached
 
         progress_cb("MAPPING", f"{package_payload.package} 패키지의 CVE 조회(Fetching CVEs)")
-        cve_ids = await _safe_call(
+        cve_ids = await safe_call(
             mapping_service.fetch_cves(
                 package_payload.package, package_payload.version_range
             ),
@@ -246,7 +231,7 @@ class AgentOrchestrator:
 
         for cve_id in missing_ids:
             progress_cb("EPSS", f"{cve_id} 점수 조회 중(Fetching score)")
-            epss_results[cve_id] = await _safe_call(
+            epss_results[cve_id] = await safe_call(
                 epss_service.fetch_score(cve_id),
                 fallback=lambda cid=cve_id: _fallback_provider.fallback_epss(cid),
                 step="EPSS",
@@ -282,7 +267,7 @@ class AgentOrchestrator:
 
         for cve_id in missing_ids:
             progress_cb("CVSS", f"{cve_id} CVSS 조회 중(Fetching CVSS score)")
-            cvss_results[cve_id] = await _safe_call(
+            cvss_results[cve_id] = await safe_call(
                 cvss_service.fetch_score(cve_id),
                 fallback=lambda cid=cve_id: _fallback_provider.fallback_cvss(cid),
                 step="CVSS",
@@ -318,7 +303,7 @@ class AgentOrchestrator:
                 return ThreatResponse(**cached)
 
         progress_cb("THREAT", f"{threat_payload.cve_id} 공격 사례 수집 중(Collecting threat cases)")
-        threat_response = await _safe_call(
+        threat_response = await safe_call(
             threat_service.collect(threat_payload),
             fallback=lambda payload=threat_payload: _fallback_provider.fallback_threat_cases(payload),
             step="THREAT",
@@ -362,7 +347,7 @@ class AgentOrchestrator:
         )
 
         progress_cb("ANALYZE", f"{threat_payload.cve_id} 위험도 평가 중(Analyzing risk)")
-        analysis_output = await _safe_call(
+        analysis_output = await safe_call(
             analyzer_service.analyze(analysis_input),
             fallback=lambda payload=analysis_input: _fallback_provider.fallback_analysis(payload),
             step="ANALYZE",
