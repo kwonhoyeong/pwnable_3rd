@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import Depends, FastAPI, HTTPException
 
-from common_lib.db import get_session
+from common_lib.db import get_session_dependency
 from common_lib.logger import get_logger
 
 from .models import CVSSInput, CVSSRecord
@@ -16,8 +16,11 @@ service = CVSSService()
 
 
 @app.post("/api/v1/cvss", response_model=CVSSRecord, tags=["cvss"])
-async def fetch_cvss(data: CVSSInput, session=Depends(get_session)) -> CVSSRecord:
+async def fetch_cvss(data: CVSSInput, session=Depends(get_session_dependency)) -> CVSSRecord:
     """CVSS 점수를 조회하고 저장(Retrieve and persist CVSS score)."""
+
+    if session is None:
+        raise HTTPException(status_code=503, detail="Database session is unavailable")
 
     try:
         result = await service.fetch_score(data.cve_id)

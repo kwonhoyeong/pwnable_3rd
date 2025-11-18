@@ -114,3 +114,15 @@ async def _safe_close(session: AsyncSession) -> None:
         logger.info("Database session close timed out; ignoring.")
     except Exception:
         pass
+
+
+async def get_session_dependency() -> AsyncIterator[AsyncSession | None]:
+    """
+    Wrapper for frameworks (e.g., FastAPI) that expect dependency callables instead of context managers.
+
+    Usage:
+        session: AsyncSession | None = Depends(get_session_dependency)
+    """
+
+    async with get_session() as session:
+        yield session

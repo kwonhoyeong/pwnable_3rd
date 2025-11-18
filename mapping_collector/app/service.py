@@ -26,12 +26,15 @@ class MappingService:
         if not self._allow_external:
             return []
 
+        payload = {
+            "package": {"name": package, "ecosystem": "npm"},
+        }
+        if version_range and version_range.lower() != "latest":
+            payload["version"] = version_range
+
         try:
             async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
-                request = client.get(
-                    self._cve_feed_url,
-                    params={"package": package, "version_range": version_range},
-                )
+                request = client.post(self._cve_feed_url, json=payload)
                 response = await asyncio.wait_for(request, timeout=self._timeout)
                 response.raise_for_status()
                 data = response.json()
@@ -47,4 +50,24 @@ class MappingService:
             logger.debug("CVE feed failure details", exc_info=exc)
             return []
 
-        return data.get("cve_ids", [])
+        vulns = data.get("vulns", [])
+        cve_ids: List[str] = []
+        for vuln in vulns:
+            aliases = vuln.get("aliases") or []
+            cve_aliases = [alias for alias in aliases if isinstance(alias, str) and alias.startswith("CVE-")]
+            if cve_aliases:
+                cve_ids.extend(cve_aliases)
+                continue
+            vuln_id = vuln.get("id")
+            if isinstance(vuln_id, str) and vuln_id.startswith("CVE-"):
+                cve_ids.append(vuln_id)
+
+        # Deduplicate while preserving order
+        seen = set()
+        ordered: List[str] = []
+        for cve in cve_ids:
+            if cve in seen:
+                continue
+            seen.add(cve)
+            ordered.append(cve)
+        return ordered

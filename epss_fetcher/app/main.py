@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import Depends, FastAPI, HTTPException
 
-from common_lib.db import get_session
+from common_lib.db import get_session_dependency
 from common_lib.logger import get_logger
 
 from .models import EPSSInput, EPSSRecord
@@ -16,8 +16,11 @@ service = EPSSService()
 
 
 @app.post("/api/v1/epss", response_model=EPSSRecord, tags=["epss"])
-async def fetch_epss(data: EPSSInput, session=Depends(get_session)) -> EPSSRecord:
+async def fetch_epss(data: EPSSInput, session=Depends(get_session_dependency)) -> EPSSRecord:
     """EPSS 점수를 조회하고 저장(Retrieve and persist EPSS score)."""
+
+    if session is None:
+        raise HTTPException(status_code=503, detail="Database session is unavailable")
 
     try:
         result = await service.fetch_score(data.cve_id)
@@ -36,4 +39,3 @@ async def health_check() -> dict[str, str]:
     """헬스체크 엔드포인트(Health check endpoint)."""
 
     return {"status": "ok"}
-

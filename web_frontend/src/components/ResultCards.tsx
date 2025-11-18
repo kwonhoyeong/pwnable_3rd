@@ -1,10 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQueryState } from '../store/queryContext';
 import '../styles/cards.scss';
 
 export const ResultCards: React.FC = () => {
   const { results, error } = useQueryState();
   const [activeIndex, setActiveIndex] = useState<number | null>(0);
+
+  useEffect(() => {
+    if (!results.length) {
+      setActiveIndex(null);
+      return;
+    }
+    setActiveIndex((prev) => {
+      if (prev === null || prev >= results.length) {
+        return 0;
+      }
+      return prev;
+    });
+  }, [results]);
 
   if (error) {
     return <div className="result-error">{error}</div>;
@@ -14,7 +27,10 @@ export const ResultCards: React.FC = () => {
     return <div className="result-placeholder">검색 결과가 없습니다(No results)</div>;
   }
 
-  const active = activeIndex !== null ? results[activeIndex] : results[0];
+  const active =
+    activeIndex !== null && typeof results[activeIndex] !== 'undefined'
+      ? results[activeIndex]
+      : results[0];
 
   return (
     <div className="result-grid">
@@ -49,4 +65,3 @@ export const ResultCards: React.FC = () => {
     </div>
   );
 };
-

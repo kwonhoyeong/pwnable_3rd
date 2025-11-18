@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import Depends, FastAPI, HTTPException
 
-from common_lib.db import get_session
+from common_lib.db import get_session_dependency
 from common_lib.logger import get_logger
 
 from .models import AnalyzerInput, AnalyzerOutput
@@ -16,8 +16,11 @@ service = AnalyzerService()
 
 
 @app.post("/api/v1/analyze", response_model=AnalyzerOutput, tags=["analysis"])
-async def analyze(data: AnalyzerInput, session=Depends(get_session)) -> AnalyzerOutput:
+async def analyze(data: AnalyzerInput, session=Depends(get_session_dependency)) -> AnalyzerOutput:
     """위험 분석 실행 및 저장(Execute risk analysis and persist result)."""
+
+    if session is None:
+        raise HTTPException(status_code=503, detail="Database session is unavailable")
 
     try:
         result = await service.analyze(data)
@@ -42,4 +45,3 @@ async def health_check() -> dict[str, str]:
     """헬스체크 엔드포인트(Health check endpoint)."""
 
     return {"status": "ok"}
-

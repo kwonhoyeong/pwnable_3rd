@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import Depends, FastAPI, HTTPException
 
-from common_lib.db import get_session
+from common_lib.db import get_session_dependency
 from common_lib.logger import get_logger
 
 from .models import ThreatInput, ThreatResponse
@@ -16,8 +16,11 @@ service = ThreatAggregationService()
 
 
 @app.post("/api/v1/threats", response_model=ThreatResponse, tags=["threats"])
-async def collect_threats(payload: ThreatInput, session=Depends(get_session)) -> ThreatResponse:
+async def collect_threats(payload: ThreatInput, session=Depends(get_session_dependency)) -> ThreatResponse:
     """위협 정보를 수집 후 저장(Collect and persist threat intelligence)."""
+
+    if session is None:
+        raise HTTPException(status_code=503, detail="Database session is unavailable")
 
     try:
         response = await service.collect(payload)
@@ -41,4 +44,3 @@ async def health_check() -> dict[str, str]:
     """헬스체크 엔드포인트(Health check endpoint)."""
 
     return {"status": "ok"}
-

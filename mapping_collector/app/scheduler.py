@@ -41,6 +41,9 @@ class MappingScheduler:
         """단일 실행(Tick execution)."""
 
         async with get_session() as session:
+            if session is None:
+                logger.warning("Database session unavailable; skipping scheduler tick")
+                return
             repository = MappingRepository(session)
             pending_jobs = await repository.list_pending_packages()
             for job in pending_jobs:

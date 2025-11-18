@@ -40,7 +40,7 @@
 ## 서비스별 환경변수(Environment variables per service)
 | 서비스(Service) | 필수 환경변수(Required) | 설명(Description) |
 |-----------------|------------------------|-------------------|
-| 모든 Python 서비스 | `NT_DATABASE_URL`, `NT_CACHE_TTL`, `NT_LOG_LEVEL` | SQLite 데이터베이스 URL, 캐시 TTL(초), 로그 레벨 설정 |
+| 모든 Python 서비스 | `NT_POSTGRES_DSN`, `NT_ENABLE_DATABASE`, `NT_CACHE_TTL`, `NT_LOG_LEVEL` | DB DSN(기본 SQLite 파일), DB 사용 여부, 캐시 TTL(초), 로그 레벨 |
 | ThreatAgent, Analyzer | `NT_PERPLEXITY_API_KEY`, `NT_CLAUDE_API_KEY`, `NT_GPT5_API_KEY` | 외부 AI API 키 입력 |
 | Web Frontend | `VITE_QUERY_API_BASE_URL` | 백엔드 QueryAPI 접속 URL |
 

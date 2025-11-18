@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 
-from common_lib.db import get_session
+from common_lib.db import get_session_dependency
 from common_lib.logger import get_logger
 
 from .models import QueryResponse
@@ -19,9 +19,12 @@ service = QueryService()
 async def query(
     package: str | None = Query(default=None),
     cve_id: str | None = Query(default=None),
-    session=Depends(get_session),
+    session=Depends(get_session_dependency),
 ) -> QueryResponse:
     """패키지 또는 CVE 기반 조회 실행(Execute query by package or CVE)."""
+
+    if session is None:
+        raise HTTPException(status_code=503, detail="Database session is unavailable")
 
     repository = QueryRepository(session)
     try:
@@ -37,4 +40,3 @@ async def health_check() -> dict[str, str]:
     """헬스체크 엔드포인트(Health check endpoint)."""
 
     return {"status": "ok"}
-

@@ -63,15 +63,14 @@ docker-compose logs -f
 docker-compose logs -f threat-agent
 ```
 
-### DB 확인
+### DB 확인 (기본 SQLite)
 ```
-docker-compose exec postgres psql -U ntuser -d threatdb
+# 로컬에서 SQLite CLI 사용
+sqlite3 data/threatdb.sqlite ".tables"
+sqlite3 data/threatdb.sqlite "SELECT * FROM package_cve_mapping LIMIT 5;"
 
-# 테이블 목록
-\dt
-
-# 쿼리 예시
-SELECT * FROM package_cve_mapping LIMIT 5;
+# 또는 컨테이너 안에서
+docker-compose exec mapping-collector sqlite3 /app/data/threatdb.sqlite "SELECT COUNT(*) FROM package_cve_mapping;"
 ```
 
 ### 서비스 재시작

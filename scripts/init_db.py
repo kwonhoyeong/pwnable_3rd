@@ -10,7 +10,7 @@ from common_lib.config import get_settings
 async def init_database() -> None:
     """데이터베이스 초기화(Initialize database)."""
     settings = get_settings()
-    db_url = settings.database_url
+    db_url = settings.postgres_dsn
 
     # sqlite+aiosqlite:///./data/threatdb.sqlite -> ./data/threatdb.sqlite
     if "sqlite" in db_url:

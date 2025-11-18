@@ -6,9 +6,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
+      NT_POSTGRES_DSN: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
       NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ENABLE_DATABASE: "true"
     volumes:
       - ./common_lib:/app/common_lib
       - ./mapping_collector:/app/mapping_collector
@@ -25,9 +26,10 @@ services:
     ports:
       - "8006:8006"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
+      NT_POSTGRES_DSN: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
       NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ENABLE_DATABASE: "true"
     volumes:
       - ./common_lib:/app/common_lib
       - ./cvss_fetcher:/app/cvss_fetcher
@@ -44,9 +46,10 @@ services:
     ports:
       - "8001:8001"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
+      NT_POSTGRES_DSN: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
       NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ENABLE_DATABASE: "true"
     volumes:
       - ./common_lib:/app/common_lib
       - ./epss_fetcher:/app/epss_fetcher
@@ -63,12 +66,13 @@ services:
     ports:
       - "8002:8002"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
+      NT_POSTGRES_DSN: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
       NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
       NT_PERPLEXITY_API_KEY: "${NT_PERPLEXITY_API_KEY:-}"
       NT_CLAUDE_API_KEY: "${NT_CLAUDE_API_KEY:-}"
       NT_GPT5_API_KEY: "${NT_GPT5_API_KEY:-}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ENABLE_DATABASE: "true"
     volumes:
       - ./common_lib:/app/common_lib
       - ./threat_agent:/app/threat_agent
@@ -85,11 +89,12 @@ services:
     ports:
       - "8003:8003"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
+      NT_POSTGRES_DSN: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
       NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
       NT_CLAUDE_API_KEY: "${NT_CLAUDE_API_KEY:-}"
       NT_GPT5_API_KEY: "${NT_GPT5_API_KEY:-}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ENABLE_DATABASE: "true"
     volumes:
       - ./common_lib:/app/common_lib
       - ./analyzer:/app/analyzer
@@ -106,9 +111,10 @@ services:
     ports:
       - "8004:8004"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
+      NT_POSTGRES_DSN: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
       NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ENABLE_DATABASE: "true"
     volumes:
       - ./common_lib:/app/common_lib
       - ./query_api:/app/query_api
