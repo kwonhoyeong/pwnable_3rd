@@ -5,7 +5,7 @@ import asyncio
 import os
 from typing import Any, Dict, List
 
-import httpx
+from anthropic import Anthropic
 
 from ..config import get_settings
 from ..logger import get_logger
@@ -15,24 +15,24 @@ logger = get_logger(__name__)
 
 
 class ClaudeClient(IAIClient):
-    """Claude API 래퍼(Wrapper for Claude API)."""
+    """Claude API 래퍼(Wrapper for Claude API using Anthropic SDK)."""
 
-    def __init__(self, base_url: str = "https://api.anthropic.com/v1", timeout: float = 5.0) -> None:
+    def __init__(self, timeout: float = 5.0) -> None:
         settings = get_settings()
-        self._base_url = base_url.rstrip("/")
         self._api_key = settings.claude_api_key
         self._timeout = timeout
         self._allow_external = settings.allow_external_calls
-        self._default_model = os.getenv("NT_CLAUDE_MODEL", "claude-3-5-sonnet-20240620")
+        self._default_model = os.getenv("NT_CLAUDE_MODEL", "claude-sonnet-4-5")
         self._default_max_tokens = 1024
-        self._api_version = os.getenv("NT_CLAUDE_API_VERSION", "2023-06-01")
+        # Initialize Anthropic client (API key loaded from ANTHROPIC_API_KEY env var automatically)
+        self._client = Anthropic(api_key=self._api_key) if self._api_key else Anthropic()
         if not self._api_key or self._api_key.strip() == "":
             logger.error(
-                "NT_CLAUDE_API_KEY is not set or empty. Claude-powered summaries will fall back to defaults."
+                "NT_CLAUDE_API_KEY or ANTHROPIC_API_KEY is not set or empty. Claude-powered summaries will fall back to defaults."
             )
 
     async def chat(self, prompt: str, **kwargs: Any) -> str:
-        """Claude 채팅 호출(Invoke Claude chat)."""
+        """Claude 채팅 호출(Invoke Claude chat using Anthropic SDK)."""
 
         if not self._allow_external:
             logger.info(
@@ -41,17 +41,13 @@ class ClaudeClient(IAIClient):
             raise RuntimeError("Claude API disabled by configuration: NT_ALLOW_EXTERNAL_CALLS=false")
 
         if not self._api_key or self._api_key.strip() == "":
-            raise RuntimeError("NT_CLAUDE_API_KEY is not configured")
+            raise RuntimeError("NT_CLAUDE_API_KEY or ANTHROPIC_API_KEY is not configured")
 
-        headers = {
-            "x-api-key": self._api_key,
-            "anthropic-version": self._api_version,
-            "content-type": "application/json",
-        }
-        payload: Dict[str, Any] = {
-            "model": kwargs.pop("model", self._default_model),
-            "max_tokens": kwargs.pop("max_tokens", self._default_max_tokens),
-            "messages": kwargs.pop(
+        try:
+            # Extract parameters from kwargs, with defaults
+            model = kwargs.pop("model", self._default_model)
+            max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
+            messages = kwargs.pop(
                 "messages",
                 [
                     {
@@ -59,43 +55,37 @@ class ClaudeClient(IAIClient):
                         "content": prompt,
                     }
                 ],
-            ),
-        }
-        payload.update(kwargs)
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(
-                    f"{self._base_url}/messages",
-                    headers=headers,
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
-            content = data.get("content")
+            )
+
+            # Call Claude API using Anthropic SDK (synchronously wrapped)
+            response = await asyncio.to_thread(
+                self._client.messages.create,
+                model=model,
+                max_tokens=max_tokens,
+                messages=messages,
+                **kwargs
+            )
+
+            # Extract text from response
+            content = response.content
             if isinstance(content, list):
                 texts: List[str] = []
                 for block in content:
-                    if isinstance(block, dict):
-                        if block.get("type") == "text":
-                            texts.append(block.get("text", ""))
+                    if hasattr(block, "text"):  # TextBlock
+                        texts.append(block.text)
                 return "\n".join(texts).strip()
-            if isinstance(content, str):
-                return content
             return ""
         except asyncio.TimeoutError as exc:
-            logger.info("Claude API 요청 시간 초과(Request timed out after %.1fs); falling back.", self._timeout)
+            logger.info("Claude API 요청 시간 초과(Request timed out); falling back.")
             raise RuntimeError("Claude API timeout") from exc
-        except httpx.HTTPStatusError as exc:  # pragma: no cover - skeleton fallback
-            logger.warning("Claude API HTTP 오류(HTTP error): %s", exc)
+        except Exception as exc:  # pragma: no cover - skeleton fallback
+            logger.warning("Claude API 오류(Error): %s", exc)
             logger.debug("Claude failure details", exc_info=exc)
-            raise RuntimeError(f"Claude API HTTP error: {exc}") from exc
-        except httpx.HTTPError as exc:  # pragma: no cover - skeleton fallback
-            logger.info("Claude API 네트워크 오류(Network error); falling back.")
-            logger.debug("Claude failure details", exc_info=exc)
-            raise RuntimeError(f"Claude API network error: {exc}") from exc
+            raise RuntimeError(f"Claude API error: {exc}") from exc
 
     async def structured_output(self, prompt: str, schema: Dict[str, Any]) -> Dict[str, Any]:
-        """Claude 구조화 응답(Structured response from Claude)."""
+        """Claude 구조화 응답(Structured response from Claude using Anthropic SDK)."""
 
-        response_text = await self.chat(prompt, schema=schema)
+        # Note: schema parameter can be passed to the API if implementing JSON mode
+        response_text = await self.chat(prompt)
         return {"raw": response_text}
