@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 class MappingService:
     """CVE 매핑 수집 서비스(Service for collecting CVE mappings)."""
 
-    def __init__(self, cve_feed_url: str = "https://example.com/cve-feed", timeout: float = 5.0) -> None:
+    def __init__(self, cve_feed_url: str = "https://api.osv.dev/v1/query", timeout: float = 5.0) -> None:
         self._cve_feed_url = cve_feed_url
         self._timeout = timeout
         self._allow_external = get_settings().allow_external_calls
