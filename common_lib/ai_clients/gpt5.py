@@ -13,15 +13,19 @@ from .base import IAIClient
 
 logger = get_logger(__name__)
 
+# Read timeout from environment, default to 30 seconds
+GPT5_TIMEOUT = float(os.getenv("GPT5_TIMEOUT_SECONDS", "30.0"))
+
 
 class GPT5Client(IAIClient):
     """GPT-5 API 래퍼(Wrapper for GPT-5 API)."""
 
-    def __init__(self, base_url: str = "https://api.openai.com/v1", timeout: float = 10.0) -> None:
+    def __init__(self, base_url: str = "https://api.openai.com/v1", timeout: float = None) -> None:
         settings = get_settings()
         self._base_url = base_url
         self._api_key = settings.gpt5_api_key
-        self._timeout = timeout
+        # Use environment-configured timeout if not explicitly provided
+        self._timeout = timeout if timeout is not None else GPT5_TIMEOUT
         self._allow_external = settings.allow_external_calls
         self._default_model = os.getenv("NT_GPT5_MODEL", "gpt-5.1")
 

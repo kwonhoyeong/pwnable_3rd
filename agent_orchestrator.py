@@ -298,19 +298,23 @@ class AgentOrchestrator:
                 # Use centralized serialization helper
                 serialized_cases = [_serialize_threat_case(case) for case in threat_response.cases]
 
+                # Handle None values for EPSS and CVSS scores
+                epss_val = epss_record.get("epss_score")
+                cvss_val = cvss_record.get("cvss_score")
+
                 pipeline_results.append(
                     {
                         "package": package_payload.package,
                         "version_range": package_payload.version_range,
                         "cve_id": cve_id,
                         "epss": {
-                            "epss_score": float(epss_record.get("epss_score", 0.0)),
+                            "epss_score": float(epss_val) if epss_val is not None else None,
                             "collected_at": _normalize_timestamp(
                                 epss_record.get("collected_at")
                             ),
                         },
                         "cvss": {
-                            "cvss_score": float(cvss_record.get("cvss_score", 0.0)),
+                            "cvss_score": float(cvss_val) if cvss_val is not None else None,
                             "vector": cvss_record.get("vector"),
                             "collected_at": _normalize_timestamp(
                                 cvss_record.get("collected_at")
@@ -494,10 +498,14 @@ class AgentOrchestrator:
                 progress_cb("ANALYZE", "캐시 적중, 분석 결과 재사용(Cache hit for analysis)")
                 return AnalyzerOutput(**cached)
 
+        # Convert EPSS and CVSS scores, handling None values
+        epss_val = epss_record.get("epss_score")
+        cvss_val = cvss_record.get("cvss_score")
+
         analysis_input = AnalyzerInput(
             cve_id=threat_payload.cve_id,
-            epss_score=float(epss_record.get("epss_score", 0.0)),
-            cvss_score=float(cvss_record.get("cvss_score", 0.0)),
+            epss_score=float(epss_val) if epss_val is not None else None,
+            cvss_score=float(cvss_val) if cvss_val is not None else None,
             cases=[case.dict() for case in threat_response.cases],
             package=threat_payload.package,
             version_range=threat_payload.version_range,

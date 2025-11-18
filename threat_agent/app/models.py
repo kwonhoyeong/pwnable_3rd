@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 class ThreatInput(BaseModel):
@@ -18,7 +18,7 @@ class ThreatInput(BaseModel):
 class ThreatCase(BaseModel):
     """공격 사례 모델(Attack case model)."""
 
-    source: HttpUrl
+    source: str = Field(..., description="위협 사례 출처 URL(Source URL of threat case)")
     title: str
     date: str
     summary: str

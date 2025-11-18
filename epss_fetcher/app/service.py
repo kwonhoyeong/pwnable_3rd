@@ -1,13 +1,14 @@
 """EPSS 점수 수집 서비스 모듈(EPSS score collection service module)."""
 from __future__ import annotations
 
-import re
+import json
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from common_lib.ai_clients import PerplexityClient
 from common_lib.config import get_settings
 from common_lib.logger import get_logger
+import re
 
 logger = get_logger(__name__)
 
@@ -22,7 +23,7 @@ class EPSSService:
         self._allow_external = get_settings().allow_external_calls
 
     @staticmethod
-    def _build_response(cve_id: str, score: float = 0.0) -> Dict[str, Any]:
+    def _build_response(cve_id: str, score: Optional[float] = None) -> Dict[str, Any]:
         return {"cve_id": cve_id, "epss_score": score, "collected_at": datetime.utcnow()}
 
     def _validate_cve_id(self, cve_id: str) -> bool:
@@ -44,10 +45,12 @@ class EPSSService:
             return self._build_response(cve_id)
 
         prompt = (
-            f"Find the current EPSS (Exploit Prediction Scoring System) score for {cve_id}. "
-            f"EPSS scores are probability values between 0.0 and 1.0 that estimate the likelihood "
-            f"of exploitation. Please search for the most recent EPSS score and provide the exact "
-            f"numeric value. Format your response as 'EPSS score: X.XXX'. If not found, respond with '0.0'."
+            f"You are an EPSS lookup agent. Find the current EPSS (Exploit Prediction Scoring System) score "
+            f"for {cve_id} from FIRST.org EPSS data. EPSS scores are probability values between 0.0 and 1.0 "
+            f"that estimate the likelihood of exploitation.\n\n"
+            f"Output ONLY the following JSON format. Do not output any other text.\n"
+            f"{{\"epss_score\": 0.1234}}\n"
+            f"If the EPSS score cannot be found, output: {{\"epss_score\": null}}"
         )
 
         for attempt in range(1, self._max_retries + 1):
@@ -88,41 +91,26 @@ class EPSSService:
 
         return self._build_response(cve_id)
 
-    def _parse_score(self, response: str) -> float:
-        """응답에서 EPSS 점수 추출(Extract EPSS score from response)."""
+    def _parse_score(self, response: str) -> Optional[float]:
+        """응답에서 EPSS 점수 추출(Extract EPSS score from response using JSON parsing)."""
 
-        # Look for patterns like "EPSS score: 0.123" or "EPSS: 0.123"
-        epss_pattern = r'EPSS\s*(?:score)?:?\s*(\d*\.?\d+)'
-        match = re.search(epss_pattern, response, re.IGNORECASE)
+        try:
+            # Try to parse as JSON
+            data = json.loads(response.strip())
+            score = data.get("epss_score", None)
 
-        if match:
-            try:
-                score = float(match.group(1))
-                # EPSS scores are between 0 and 1
-                if 0.0 <= score <= 1.0:
-                    return score
-                # Handle percentage format (e.g., 12.3% -> 0.123)
-                if score > 1.0 and score <= 100.0:
-                    return score / 100.0
-            except ValueError:
-                pass
+            if score is None:
+                return None
 
-        # Fallback: look for decimal numbers near "EPSS" keyword
-        words = response.split()
-        for i, word in enumerate(words):
-            if 'epss' in word.lower():
-                # Check next few words for a number
-                for j in range(i + 1, min(i + 5, len(words))):
-                    number_match = re.search(r'\d*\.?\d+', words[j])
-                    if number_match:
-                        try:
-                            score = float(number_match.group(0))
-                            if 0.0 <= score <= 1.0:
-                                return score
-                            if score > 1.0 and score <= 100.0:
-                                return score / 100.0
-                        except ValueError:
-                            continue
+            # Validate score is a number and within valid range
+            if isinstance(score, (int, float)):
+                score_val = float(score)
+                if 0.0 <= score_val <= 1.0:
+                    return score_val
+                # Handle percentage format (e.g., 12.3 -> 0.123)
+                if score_val > 1.0 and score_val <= 100.0:
+                    return score_val / 100.0
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            logger.warning("Failed to parse EPSS JSON response: %s. Response: %s", e, response)
 
-        logger.warning("EPSS 점수를 응답에서 찾을 수 없음(Could not parse EPSS score from response): %s", response)
-        return 0.0
+        return None
