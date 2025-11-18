@@ -1,6 +1,7 @@
 """CVSS API 호출 서비스(Service for CVSS API calls)."""
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -22,7 +23,7 @@ class CVSSService:
         self._allow_external = get_settings().allow_external_calls
 
     @staticmethod
-    def _build_response(cve_id: str, score: float = 0.0, vector: Optional[str] = None) -> Dict[str, Any]:
+    def _build_response(cve_id: str, score: Optional[float] = None, vector: Optional[str] = None) -> Dict[str, Any]:
         return {
             "cve_id": cve_id,
             "cvss_score": score,
@@ -49,10 +50,12 @@ class CVSSService:
             return self._build_response(cve_id)
 
         prompt = (
-            f"Find the CVSS (Common Vulnerability Scoring System) v3 base score and vector string for {cve_id}. "
-            f"CVSS v3 base scores range from 0.0 to 10.0. The vector string starts with 'CVSS:3' and contains "
-            f"metrics like AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H. Please provide both values clearly labeled. "
-            f"Format: 'Base Score: X.X' and 'Vector: CVSS:3.X/...'. If not found, respond with score: 0.0 and vector: None."
+            f"You are a CVSS lookup agent. Find the latest CVSS v3 base score and vector string for {cve_id} "
+            f"from official NVD or CVE databases. CVSS v3 base scores range from 0.0 to 10.0. "
+            f"The vector string starts with 'CVSS:3' and contains metrics like AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H.\n\n"
+            f"Output ONLY the following JSON format. Do not output any other text.\n"
+            f'{{\"cvss_score\": 7.5, \"vector\": \"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H\"}}\n'
+            f'If the CVSS information cannot be found, output: {{\"cvss_score\": null, \"vector\": null}}'
         )
 
         for attempt in range(1, self._max_retries + 1):
@@ -95,49 +98,35 @@ class CVSSService:
 
         return self._build_response(cve_id)
 
-    def _parse_cvss_data(self, response: str) -> tuple[float, Optional[str]]:
-        """응답에서 CVSS 점수와 벡터 문자열 추출(Extract CVSS score and vector from response)."""
+    def _parse_cvss_data(self, response: str) -> tuple[Optional[float], Optional[str]]:
+        """응답에서 CVSS 점수와 벡터 문자열 추출(Extract CVSS score and vector from response using JSON parsing)."""
 
-        score = 0.0
-        vector = None
+        try:
+            # Try to parse as JSON
+            data = json.loads(response.strip())
+            score = data.get("cvss_score", None)
+            vector = data.get("vector", None)
 
-        # Extract CVSS vector string - more permissive pattern
-        # Handles variations: whitespace, trailing text, optional metrics
-        vector_pattern = r'CVSS:3\.\d+/(?:[A-Z]+:[A-Z]+/?)+'
-        vector_match = re.search(vector_pattern, response, re.IGNORECASE)
-        if vector_match:
-            # Clean up the matched vector (remove trailing slashes, extra spaces)
-            vector = vector_match.group(0).strip().rstrip('/')
+            # Validate score
+            if isinstance(score, (int, float)):
+                score_val = float(score)
+                if 0.0 <= score_val <= 10.0:
+                    score = score_val
+                else:
+                    score = None
+            elif score is not None:
+                # Score is not a valid number
+                score = None
 
-        # Extract numeric score - look for score in context to avoid version numbers
-        # Priority 1: Look for "score: X.X" or "Base Score: X.X"
-        score_pattern = r'(?:base\s+)?score[:\s]+(\d+\.?\d*)'
-        score_match = re.search(score_pattern, response, re.IGNORECASE)
+            # Validate vector
+            if vector is not None and not isinstance(vector, str):
+                vector = None
+            elif isinstance(vector, str) and vector.strip():
+                vector = vector.strip()
+            else:
+                vector = None
 
-        if score_match:
-            try:
-                potential_score = float(score_match.group(1))
-                if 0.0 <= potential_score <= 10.0:
-                    score = potential_score
-            except ValueError:
-                pass
-
-        # Priority 2: If no labeled score found, look for numbers NOT part of CVSS version
-        if score == 0.0:
-            # Remove the vector string from response to avoid matching its version number
-            cleaned_response = re.sub(r'CVSS:3\.\d+', '', response)
-            score_matches = re.findall(r'\b(\d+\.?\d*)\b', cleaned_response)
-            for match in score_matches:
-                try:
-                    potential_score = float(match)
-                    # CVSS scores are between 0.0 and 10.0 (but not 3.0, 3.1 which are versions)
-                    if 0.0 <= potential_score <= 10.0 and potential_score not in [3.0, 3.1]:
-                        score = potential_score
-                        break
-                except ValueError:
-                    continue
-
-        if score == 0.0 and vector is None:
-            logger.warning("CVSS 점수를 응답에서 찾을 수 없음(Could not parse CVSS data from response): %s", response)
-
-        return score, vector
+            return score, vector
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            logger.warning("Failed to parse CVSS JSON response: %s. Response: %s", e, response)
+            return None, None

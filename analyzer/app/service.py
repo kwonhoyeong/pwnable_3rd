@@ -17,12 +17,16 @@ class RiskRuleEngine:
     """규칙 기반 위험 산정 엔진(Rule-based risk scoring engine)."""
 
     @staticmethod
-    def classify(epss_score: float, cvss_score: float, case_count: int) -> str:
+    def classify(epss_score: float | None, cvss_score: float | None, case_count: int) -> str:
         """EPSS, CVSS, 사례 수를 바탕으로 위험 등급 산정(Classify risk level)."""
 
-        if epss_score >= 0.7 or cvss_score >= 8.0 or case_count >= 3:
+        # Treat None scores as 0.0 for comparison purposes (conservative approach)
+        epss = epss_score if epss_score is not None else 0.0
+        cvss = cvss_score if cvss_score is not None else 0.0
+
+        if epss >= 0.7 or cvss >= 8.0 or case_count >= 3:
             return "High"
-        if epss_score >= 0.4 or cvss_score >= 6.0 or case_count == 2:
+        if epss >= 0.4 or cvss >= 6.0 or case_count == 2:
             return "Medium"
         return "Low"
 
