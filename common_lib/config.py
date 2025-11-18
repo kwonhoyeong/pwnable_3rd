@@ -36,7 +36,7 @@ class Settings(BaseSettings):
         description="Kafka 부트스트랩 서버(Kafka bootstrap servers)",
     )
     allow_external_calls: bool = Field(
-        default=False,
+        default=True,
         description="외부 API 호출 허용 여부(Allow outbound API calls in this environment)",
     )
     enable_database: bool = Field(
