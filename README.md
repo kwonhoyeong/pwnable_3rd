@@ -40,6 +40,11 @@ NT_REDIS_URL=redis://localhost:6379/0
 NT_GPT5_API_KEY=sk-REPLACE_WITH_YOUR_OPENAI_API_KEY
 NT_PERPLEXITY_API_KEY=your-perplexity-key-here
 NT_CLAUDE_API_KEY=your-claude-key-here
+
+# Feature toggles (set to true when infrastructure is available)
+NT_ALLOW_EXTERNAL_CALLS=false
+NT_ENABLE_DATABASE=false
+NT_ENABLE_CACHE=false
 ```
 
 ### ⚠️ Important Notes on API Keys
@@ -120,6 +125,10 @@ chmod +x run_pipeline.sh
   - Missing `NT_PERPLEXITY_API_KEY`: Uses fallback threat cases
   - Missing `NT_GPT5_API_KEY`: Uses fallback analysis recommendations
   - Missing external API access: Uses default EPSS/CVSS scores (0.0)
+- **Feature toggles**: External APIs/Redis/PostgreSQL are disabled by default for CLI tests.
+  - Set `NT_ALLOW_EXTERNAL_CALLS=true` to hit live AI/Perplexity endpoints.
+  - Set `NT_ENABLE_DATABASE=true` when PostgreSQL is reachable.
+  - Set `NT_ENABLE_CACHE=true` when Redis is available.
 
 ### Recent Fixes (2025-11-17)
 - ✅ Fixed Perplexity API header error with empty API keys

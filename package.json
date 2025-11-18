@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "inside": "^1.0.0",
+    "npm-threat-frontend": "file:web_frontend"
+  }
+}

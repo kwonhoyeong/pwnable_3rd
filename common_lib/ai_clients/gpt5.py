@@ -1,6 +1,8 @@
 """GPT-5 API 클라이언트 구현(GPT-5 API client implementation)."""
 from __future__ import annotations
 
+import asyncio
+import os
 from typing import Any, Dict
 
 import httpx
@@ -15,11 +17,13 @@ logger = get_logger(__name__)
 class GPT5Client(IAIClient):
     """GPT-5 API 래퍼(Wrapper for GPT-5 API)."""
 
-    def __init__(self, base_url: str = "https://api.openai.com/v1", timeout: float = 300.0) -> None:
+    def __init__(self, base_url: str = "https://api.openai.com/v1", timeout: float = 10.0) -> None:
         settings = get_settings()
         self._base_url = base_url
         self._api_key = settings.gpt5_api_key
         self._timeout = timeout
+        self._allow_external = settings.allow_external_calls
+        self._default_model = os.getenv("NT_GPT5_MODEL", "gpt-5.1")
 
         # Validate API key at initialization
         if not self._api_key or self._api_key.strip() == "":
@@ -33,14 +37,34 @@ class GPT5Client(IAIClient):
         """GPT-5 채팅 호출(Invoke GPT-5 chat)."""
 
         # Check API key before making request
+        if not self._allow_external:
+            logger.info("GPT-5 external calls disabled; using fallback responses.")
+            raise RuntimeError("GPT-5 API disabled by configuration")
+
         if not self._api_key or self._api_key.strip() == "":
             logger.warning(
                 "NT_GPT5_API_KEY is missing or empty; skipping GPT-5 API call and using fallback analysis."
             )
             raise RuntimeError("NT_GPT5_API_KEY is not configured")
 
-        headers = {"Authorization": f"Bearer {self._api_key}"}
-        payload = {"prompt": prompt, **kwargs}
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload: Dict[str, Any] = {
+            "model": kwargs.pop("model", self._default_model),
+            "messages": kwargs.pop(
+                "messages",
+                [
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+            ),
+        }
+        payload.update(kwargs)
 
         logger.debug(
             "Making GPT-5 API request to %s/chat/completions",
@@ -49,11 +73,12 @@ class GPT5Client(IAIClient):
 
         try:
             async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
-                response = await client.post(
+                request = client.post(
                     f"{self._base_url}/chat/completions",
                     headers=headers,
                     json=payload,
                 )
+                response = await asyncio.wait_for(request, timeout=self._timeout)
                 response.raise_for_status()
                 data = response.json()
             choices = data.get("choices", [])
@@ -62,6 +87,13 @@ class GPT5Client(IAIClient):
                 return choices[0].get("message", {}).get("content", "")
             logger.warning("GPT-5 API returned empty choices")
             return ""
+        except asyncio.TimeoutError as exc:
+            logger.info(
+                "GPT-5 API request timed out after %.1fs (endpoint=%s/chat/completions); using fallback.",
+                self._timeout,
+                self._base_url,
+            )
+            raise RuntimeError("GPT-5 API timeout") from exc
         except httpx.HTTPStatusError as exc:  # pragma: no cover - skeleton fallback
             status_code = exc.response.status_code
             try:
@@ -90,12 +122,11 @@ class GPT5Client(IAIClient):
 
             raise RuntimeError(f"GPT-5 API HTTP error: status={status_code}, body={error_body}") from exc
         except httpx.HTTPError as exc:  # pragma: no cover - skeleton fallback
-            logger.error(
-                "GPT-5 API network error: endpoint=%s/chat/completions, error=%s",
+            logger.info(
+                "GPT-5 API network error: endpoint=%s/chat/completions. Falling back.",
                 self._base_url,
-                str(exc),
-                exc_info=True
             )
+            logger.debug("GPT-5 network error details", exc_info=exc)
             raise RuntimeError(f"GPT-5 API network error: {exc}") from exc
 
     async def structured_output(self, prompt: str, schema: Dict[str, Any]) -> Dict[str, Any]:

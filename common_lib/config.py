@@ -35,6 +35,18 @@ class Settings(BaseSettings):
         default="kafka:9092",
         description="Kafka 부트스트랩 서버(Kafka bootstrap servers)",
     )
+    allow_external_calls: bool = Field(
+        default=False,
+        description="외부 API 호출 허용 여부(Allow outbound API calls in this environment)",
+    )
+    enable_database: bool = Field(
+        default=False,
+        description="PostgreSQL 지속성 사용 여부(Enable PostgreSQL persistence)",
+    )
+    enable_cache: bool = Field(
+        default=False,
+        description="Redis 캐시 사용 여부(Enable Redis caching)",
+    )
 
     perplexity_api_key: str = Field(default="", description="Perplexity API 키(Perplexity API key)")
     claude_api_key: str = Field(default="", description="Claude API 키(Claude API key)")

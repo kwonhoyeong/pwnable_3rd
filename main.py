@@ -75,14 +75,38 @@ async def main_async(args: argparse.Namespace) -> None:
         force=args.force,
         progress_cb=_default_progress,
     )
+    logger.info("Pipeline run completed; emitting JSON result.")
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 def main() -> None:
-    """동기 진입점(Synchronous entrypoint)."""
+    """동기 진입점(Synchronous entrypoint) with fast shutdown."""
 
     args = parse_args()
-    asyncio.run(main_async(args))
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(main_async(args))
+        loop.run_until_complete(loop.shutdown_asyncgens())
+    finally:
+        _shutdown_default_executor(loop)
+        loop.close()
+
+
+def _shutdown_default_executor(loop: asyncio.AbstractEventLoop) -> None:
+    """Ensure default executor threads do not block process exit."""
+
+    executor = getattr(loop, "_default_executor", None)
+    if executor is None:
+        return
+
+    loop._default_executor = None  # type: ignore[attr-defined]
+    try:
+        executor.shutdown(wait=False, cancel_futures=True)
+    except TypeError:
+        # Python <3.9 does not support cancel_futures arg
+        executor.shutdown(wait=False)
+
 
 
 if __name__ == "__main__":

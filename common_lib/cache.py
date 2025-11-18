@@ -55,7 +55,12 @@ async def close_redis() -> None:
 class AsyncCache:
     """Redis 기반 비동기 캐시(Async redis-backed cache helper)."""
 
-    def __init__(self, namespace: str = "pipeline", ttl_seconds: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        namespace: str = "pipeline",
+        ttl_seconds: Optional[int] = None,
+        io_timeout: float = 2.0,
+    ) -> None:
         settings = get_settings()
         resolved_ttl = ttl_seconds if ttl_seconds is not None else settings.cache_ttl_seconds
         if resolved_ttl is not None and resolved_ttl <= 0:
@@ -64,6 +69,10 @@ class AsyncCache:
 
         self._ttl_seconds = resolved_ttl
         self._namespace = namespace
+        self._io_timeout = io_timeout if io_timeout > 0 else None
+        self._disabled = not settings.enable_cache
+        if self._disabled:
+            logger.info("Redis cache disabled via configuration; using in-memory fallbacks")
 
     @staticmethod
     def _serialize(value: Any) -> Any:
@@ -77,16 +86,31 @@ class AsyncCache:
     async def get(self, key: str) -> Any:
         """캐시 값 조회(Get cached value if available)."""
 
-        try:
-            redis_client = await get_redis()
-        except Exception as exc:  # pragma: no cover - cache backend down
-            logger.warning("Redis unavailable for cache get %s", key, exc_info=exc)
+        if self._disabled:
             return None
 
         try:
-            payload = await redis_client.get(self._build_key(key))
+            redis_client = await get_redis()
+        except Exception as exc:  # pragma: no cover - cache backend down
+            logger.info("Redis unavailable for cache get %s; disabling cache (offline mode).", key)
+            logger.debug("Redis get failure details", exc_info=exc)
+            self._disabled = True
+            return None
+
+        try:
+            operation = redis_client.get(self._build_key(key))
+            if self._io_timeout is not None:
+                payload = await asyncio.wait_for(operation, timeout=self._io_timeout)
+            else:
+                payload = await operation
+        except asyncio.TimeoutError:
+            logger.info("Redis timeout during get for %s; disabling cache.", key)
+            self._disabled = True
+            return None
         except Exception as exc:  # pragma: no cover - redis failure
-            logger.warning("Redis error during get for %s", key, exc_info=exc)
+            logger.info("Redis error during get for %s; disabling cache.", key)
+            logger.debug("Redis get failure details", exc_info=exc)
+            self._disabled = True
             return None
 
         if payload is None:
@@ -101,10 +125,15 @@ class AsyncCache:
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """캐시에 값 저장(Store value in cache)."""
 
+        if self._disabled:
+            return
+
         try:
             redis_client = await get_redis()
         except Exception as exc:  # pragma: no cover - cache backend down
-            logger.warning("Redis unavailable for cache set %s", key, exc_info=exc)
+            logger.info("Redis unavailable for cache set %s; disabling cache (offline mode).", key)
+            logger.debug("Redis set failure details", exc_info=exc)
+            self._disabled = True
             return
 
         try:
@@ -117,6 +146,15 @@ class AsyncCache:
         if ttl_seconds is not None and ttl_seconds <= 0:
             ttl_seconds = None
         try:
-            await redis_client.set(self._build_key(key), payload, ex=ttl_seconds)
+            operation = redis_client.set(self._build_key(key), payload, ex=ttl_seconds)
+            if self._io_timeout is not None:
+                await asyncio.wait_for(operation, timeout=self._io_timeout)
+            else:
+                await operation
+        except asyncio.TimeoutError:
+            logger.info("Redis timeout during set for %s; disabling cache.", key)
+            self._disabled = True
         except Exception as exc:  # pragma: no cover - redis failure
-            logger.warning("Redis error during set for %s", key, exc_info=exc)
+            logger.info("Redis error during set for %s; disabling cache.", key)
+            logger.debug("Redis set failure details", exc_info=exc)
+            self._disabled = True

@@ -1,9 +1,11 @@
 """데이터베이스 연결 풀(Database connection pool)."""
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -21,6 +23,9 @@ async def get_engine() -> AsyncEngine | None:
     global _engine
     if _engine is None:
         settings = get_settings()
+        if not settings.enable_database:
+            logger.info("Database access disabled via configuration; running in in-memory mode")
+            return None
         logger.info("Initializing async engine")
         try:
             _engine = create_async_engine(settings.postgres_dsn, future=True, echo=False)
@@ -39,6 +44,12 @@ async def get_session() -> AsyncIterator[AsyncSession | None]:
     session = None
 
     try:
+        settings = get_settings()
+        if not settings.enable_database:
+            logger.info("Database disabled; yielding in-memory session")
+            yield None
+            return
+
         if _session_factory is None:
             engine = await get_engine()
             if engine is None:
@@ -48,6 +59,12 @@ async def get_session() -> AsyncIterator[AsyncSession | None]:
             _session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
         session = _session_factory()
+        if not await _ensure_connection(session):
+            await _safe_close(session)
+            session = None
+            yield None
+            return
+
         yield session
     except Exception as exc:  # pragma: no cover - skeleton
         if session is not None:
@@ -70,8 +87,30 @@ async def get_session() -> AsyncIterator[AsyncSession | None]:
             raise
     finally:
         if session is not None:
-            try:
-                await session.close()
-            except Exception:
-                pass
+            await _safe_close(session)
 
+
+async def _ensure_connection(session: AsyncSession) -> bool:
+    """Ensure database connectivity; disable persistence if unreachable."""
+
+    try:
+        await asyncio.wait_for(session.execute(text("SELECT 1")), timeout=3.0)
+        return True
+    except asyncio.TimeoutError:
+        logger.info("Database connectivity check timed out; running without DB persistence.")
+        return False
+    except Exception as exc:
+        logger.info("Database connectivity check failed; running without DB persistence: %s", exc)
+        return False
+
+
+async def _safe_close(session: AsyncSession) -> None:
+    """Close session with timeout to avoid hanging on network issues."""
+
+    try:
+        logger.info("Closing database session.")
+        await asyncio.wait_for(session.close(), timeout=1.0)
+    except asyncio.TimeoutError:
+        logger.info("Database session close timed out; ignoring.")
+    except Exception:
+        pass
