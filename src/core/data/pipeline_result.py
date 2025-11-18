@@ -6,7 +6,7 @@ from analyzer.app.models import AnalyzerOutput
 from threat_agent.app.models import ThreatResponse
 
 from src.core.utils.timestamps import normalize_timestamp
-from src.core.serialization.threat_case import serialize_threat_case
+from src.core.data.threat_case import serialize_threat_case
 
 
 def serialize_pipeline_result(
