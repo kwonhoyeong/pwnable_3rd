@@ -28,10 +28,14 @@ export const ResultCards: React.FC = () => {
             <h3>{item.cve_id}</h3>
             <p className="result-card__priority">우선순위(Priority): {item.priority_label}</p>
             <p className="result-card__risk">위험도(Risk): {item.risk_level}</p>
-            <p className="result-card__epss">EPSS: {item.epss_score.toFixed(2)}</p>
-            {typeof item.cvss_score === 'number' && (
-              <p className="result-card__cvss">CVSS: {item.cvss_score.toFixed(1)}</p>
-            )}
+            <p className="result-card__epss">
+              EPSS:{' '}
+              {typeof item.epss_score === 'number' ? item.epss_score.toFixed(2) : '정보 없음'}
+            </p>
+            <p className="result-card__cvss">
+              CVSS:{' '}
+              {typeof item.cvss_score === 'number' ? item.cvss_score.toFixed(1) : '정보 없음'}
+            </p>
           </article>
         ))}
       </div>
@@ -49,4 +53,3 @@ export const ResultCards: React.FC = () => {
     </div>
   );
 };
-

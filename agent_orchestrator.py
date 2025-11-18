@@ -49,11 +49,22 @@ def _fallback_cves(package: str) -> List[str]:
 
 
 def _fallback_epss(cve_id: str) -> Dict[str, Any]:
-    return {"cve_id": cve_id, "epss_score": 0.5, "collected_at": datetime.utcnow()}
+    return {
+        "cve_id": cve_id,
+        "epss_score": None,
+        "source": "fallback",
+        "collected_at": datetime.utcnow(),
+    }
 
 
 def _fallback_cvss(cve_id: str) -> Dict[str, Any]:
-    return {"cve_id": cve_id, "cvss_score": 5.0, "vector": None, "collected_at": datetime.utcnow()}
+    return {
+        "cve_id": cve_id,
+        "cvss_score": None,
+        "vector": None,
+        "source": "fallback",
+        "collected_at": datetime.utcnow(),
+    }
 
 
 def _resolve_epss_entry(results: Dict[str, Dict[str, Any]], cve_id: str) -> Dict[str, Any]:
@@ -216,7 +227,7 @@ class AgentOrchestrator:
                         epss_record = _resolve_epss_entry(epss_results, cve_id)
                         await epss_repo.upsert_score(
                             cve_id,
-                            float(epss_record.get("epss_score", 0.0)),
+                            epss_record.get("epss_score"),
                             _ensure_datetime(epss_record.get("collected_at")),
                         )
                 except Exception as exc:
@@ -229,7 +240,7 @@ class AgentOrchestrator:
                         cvss_record = _resolve_cvss_entry(cvss_results, cve_id)
                         await cvss_repo.upsert_score(
                             cve_id,
-                            float(cvss_record.get("cvss_score", 0.0)),
+                            cvss_record.get("cvss_score"),
                             cvss_record.get("vector"),
                             _ensure_datetime(cvss_record.get("collected_at")),
                         )
@@ -304,14 +315,16 @@ class AgentOrchestrator:
                         "version_range": package_payload.version_range,
                         "cve_id": cve_id,
                         "epss": {
-                            "epss_score": float(epss_record.get("epss_score", 0.0)),
+                            "epss_score": epss_record.get("epss_score"),
+                            "source": epss_record.get("source"),
                             "collected_at": _normalize_timestamp(
                                 epss_record.get("collected_at")
                             ),
                         },
                         "cvss": {
-                            "cvss_score": float(cvss_record.get("cvss_score", 0.0)),
+                            "cvss_score": cvss_record.get("cvss_score"),
                             "vector": cvss_record.get("vector"),
+                            "source": cvss_record.get("source"),
                             "collected_at": _normalize_timestamp(
                                 cvss_record.get("collected_at")
                             ),
@@ -496,8 +509,8 @@ class AgentOrchestrator:
 
         analysis_input = AnalyzerInput(
             cve_id=threat_payload.cve_id,
-            epss_score=float(epss_record.get("epss_score", 0.0)),
-            cvss_score=float(cvss_record.get("cvss_score", 0.0)),
+            epss_score=epss_record.get("epss_score"),
+            cvss_score=cvss_record.get("cvss_score"),
             cases=[case.dict() for case in threat_response.cases],
             package=threat_payload.package,
             version_range=threat_payload.version_range,

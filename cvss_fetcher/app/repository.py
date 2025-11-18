@@ -17,7 +17,13 @@ class CVSSRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def upsert_score(self, cve_id: str, cvss_score: float, vector: str | None, collected_at: datetime) -> None:
+    async def upsert_score(
+        self,
+        cve_id: str,
+        cvss_score: float | None,
+        vector: str | None,
+        collected_at: datetime,
+    ) -> None:
         """CVSS 점수 저장 또는 갱신(Upsert CVSS score)."""
 
         query = text(

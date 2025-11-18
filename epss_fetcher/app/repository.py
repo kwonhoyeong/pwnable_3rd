@@ -17,7 +17,7 @@ class EPSSRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def upsert_score(self, cve_id: str, epss_score: float, collected_at: datetime) -> None:
+    async def upsert_score(self, cve_id: str, epss_score: float | None, collected_at: datetime) -> None:
         """EPSS 점수 저장(Upsert EPSS score)."""
 
         query = text(
@@ -32,4 +32,3 @@ class EPSSRepository:
             query,
             {"cve_id": cve_id, "epss_score": epss_score, "collected_at": collected_at},
         )
-

@@ -3,7 +3,7 @@ import axios from 'axios';
 
 export interface CVEDetail {
   cve_id: string;
-  epss_score: number;
+  epss_score: number | null;
   cvss_score?: number | null;
   risk_level: string;
   analysis_summary: string;
@@ -63,4 +63,3 @@ export const useQueryState = (): QueryContextValue => {
   }
   return context;
 };
-

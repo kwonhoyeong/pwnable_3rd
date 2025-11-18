@@ -84,16 +84,27 @@ class QueryService:
         for item in results:
             risk_level = str(item.get("risk_level", "Unknown"))
             risk_weight = risk_weights.get(risk_level, 0)
-            epss_score = float(item.get("epss_score", 0.0))
+            epss_value = item.get("epss_score")
+            epss_score = float(epss_value) if epss_value is not None else None
             cvss_score = item.get("cvss_score")
-            cvss_value = float(cvss_score) if cvss_score is not None else 0.0
+            cvss_value = float(cvss_score) if cvss_score is not None else None
 
-            priority_score = (risk_weight * 100) + (cvss_value * 5) + (epss_score * 10)
+            priority_score = risk_weight * 100
+            if cvss_value is not None:
+                priority_score += cvss_value * 5
+            if epss_score is not None:
+                priority_score += epss_score * 10
 
-            if risk_weight >= 3 or cvss_value >= 8.0 or epss_score >= 0.7:
+            if risk_weight >= 3 or (cvss_value is not None and cvss_value >= 8.0) or (
+                epss_score is not None and epss_score >= 0.7
+            ):
                 priority_label = "P1"
-            elif risk_weight >= 2 or cvss_value >= 6.0 or epss_score >= 0.4:
+            elif risk_weight >= 2 or (cvss_value is not None and cvss_value >= 6.0) or (
+                epss_score is not None and epss_score >= 0.4
+            ):
                 priority_label = "P2"
+            elif epss_score is None and cvss_value is None:
+                priority_label = "P2" if risk_weight else "P3"
             else:
                 priority_label = "P3"
 
@@ -108,4 +119,3 @@ class QueryService:
 
         prioritized.sort(key=lambda entry: entry["priority_score"], reverse=True)
         return prioritized
-

@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS package_scan_queue (
 CREATE TABLE IF NOT EXISTS epss_scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cve_id TEXT NOT NULL UNIQUE,
-    epss_score REAL NOT NULL,
+    epss_score REAL,
     collected_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS epss_scores (
 CREATE TABLE IF NOT EXISTS cvss_scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cve_id TEXT NOT NULL UNIQUE,
-    cvss_score REAL NOT NULL,
+    cvss_score REAL,
     severity TEXT,
     collected_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

@@ -10,7 +10,7 @@ class CVEDetail(BaseModel):
     """CVE 상세 정보 모델(CVE detail model)."""
 
     cve_id: str
-    epss_score: float
+    epss_score: float | None = None
     cvss_score: float | None = None
     risk_level: str
     analysis_summary: str
@@ -25,4 +25,3 @@ class QueryResponse(BaseModel):
     package: Optional[str] = None
     cve_id: Optional[str] = None
     cve_list: List[CVEDetail]
-

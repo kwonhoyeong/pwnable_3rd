@@ -28,7 +28,7 @@ class QueryRepository:
                 WHERE package = :package
             )
             SELECT exp.cve_id,
-                   COALESCE(es.epss_score, 0.0) AS epss_score,
+                   es.epss_score,
                    cs.cvss_score,
                    ar.risk_level,
                    ar.analysis_summary,
@@ -44,7 +44,7 @@ class QueryRepository:
         return [
             {
                 "cve_id": row.cve_id,
-                "epss_score": row.epss_score or 0.0,
+                "epss_score": row.epss_score,
                 "cvss_score": row.cvss_score,
                 "risk_level": row.risk_level or "Unknown",
                 "analysis_summary": row.analysis_summary or "",
@@ -75,7 +75,7 @@ class QueryRepository:
         return [
             {
                 "cve_id": row.cve_id,
-                "epss_score": row.epss_score or 0.0,
+                "epss_score": row.epss_score,
                 "cvss_score": row.cvss_score,
                 "risk_level": row.risk_level or "Unknown",
                 "analysis_summary": row.analysis_summary or "",
@@ -83,4 +83,3 @@ class QueryRepository:
             }
             for row in rows
         ]
-

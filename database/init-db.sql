@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS package_scan_queue (
 CREATE TABLE IF NOT EXISTS epss_scores (
     id SERIAL PRIMARY KEY,
     cve_id TEXT NOT NULL UNIQUE,
-    epss_score NUMERIC(5,4) NOT NULL,
+    epss_score NUMERIC(5,4),
     collected_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

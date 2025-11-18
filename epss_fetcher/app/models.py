@@ -16,6 +16,6 @@ class EPSSRecord(BaseModel):
     """EPSS 결과 모델(Result model for EPSS)."""
 
     cve_id: str
-    epss_score: float
+    epss_score: float | None = None
+    source: str | None = None
     collected_at: datetime
-

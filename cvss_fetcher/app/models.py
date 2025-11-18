@@ -16,6 +16,7 @@ class CVSSRecord(BaseModel):
     """CVSS 응답 모델(Response model for CVSS data)."""
 
     cve_id: str
-    cvss_score: float
+    cvss_score: float | None = None
     vector: str | None = None
+    source: str | None = None
     collected_at: datetime
