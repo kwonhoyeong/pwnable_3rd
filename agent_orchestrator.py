@@ -22,9 +22,15 @@ from threat_agent.app.models import ThreatCase, ThreatInput, ThreatResponse
 from threat_agent.app.repository import ThreatRepository
 from threat_agent.app.services import ThreatAggregationService
 
+from src.core.fallback import FallbackProvider
+from src.core.utils.timestamps import normalize_timestamp, ensure_datetime
+
 ProgressCallback = Callable[[str, str], None]
 
 logger = get_logger(__name__)
+
+# Use FallbackProvider for consistent fallback data generation
+_fallback_provider = FallbackProvider()
 
 
 async def _safe_call(
@@ -43,24 +49,11 @@ async def _safe_call(
         return fallback()
 
 
-def _fallback_cves(package: str) -> List[str]:
-    suffix = abs(hash(package)) % 10000
-    return [f"CVE-2025-{suffix:04d}"]
-
-
-def _fallback_epss(cve_id: str) -> Dict[str, Any]:
-    return {"cve_id": cve_id, "epss_score": 0.5, "collected_at": datetime.utcnow()}
-
-
-def _fallback_cvss(cve_id: str) -> Dict[str, Any]:
-    return {"cve_id": cve_id, "cvss_score": 5.0, "vector": None, "collected_at": datetime.utcnow()}
-
-
 def _resolve_epss_entry(results: Dict[str, Dict[str, Any]], cve_id: str) -> Dict[str, Any]:
     entry = results.get(cve_id)
     if entry is None:
         logger.warning("Missing EPSS result for %s, using fallback defaults", cve_id)
-        entry = _fallback_epss(cve_id)
+        entry = _fallback_provider.fallback_epss(cve_id)
         results[cve_id] = entry
     return entry
 
@@ -69,57 +62,9 @@ def _resolve_cvss_entry(results: Dict[str, Dict[str, Any]], cve_id: str) -> Dict
     entry = results.get(cve_id)
     if entry is None:
         logger.warning("Missing CVSS result for %s, using fallback defaults", cve_id)
-        entry = _fallback_cvss(cve_id)
+        entry = _fallback_provider.fallback_cvss(cve_id)
         results[cve_id] = entry
     return entry
-
-
-def _fallback_cases(payload: ThreatInput) -> ThreatResponse:
-    fallback_case = ThreatCase(
-        source="https://example.com/prototype-case",
-        title=f"Fallback case for {payload.cve_id}",
-        date=datetime.utcnow().date().isoformat(),
-        summary="AI API 호출 실패로 인해 기본 설명(Default narrative due to AI error).",
-        collected_at=datetime.utcnow(),
-    )
-    return ThreatResponse(
-        cve_id=payload.cve_id,
-        package=payload.package,
-        version_range=payload.version_range,
-        cases=[fallback_case],
-    )
-
-
-def _fallback_analysis(payload: AnalyzerInput) -> AnalyzerOutput:
-    return AnalyzerOutput(
-        cve_id=payload.cve_id,
-        risk_level="Medium",
-        recommendations=[
-            "패키지를 최신 버전으로 업그레이드하세요(Upgrade package to latest).",
-            "추가 모니터링을 수행하세요(Enable heightened monitoring).",
-        ],
-        analysis_summary="AI 분석 실패로 수동 검토 필요(Manual review required due to AI failure).",
-        generated_at=datetime.utcnow(),
-    )
-
-
-def _normalize_timestamp(value: Any) -> str:
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, str):
-        return value
-    return datetime.utcnow().isoformat()
-
-
-def _ensure_datetime(value: Any) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            logger.warning("Invalid datetime format encountered: %s", value)
-    return datetime.utcnow()
 
 
 def _serialize_threat_case(case: ThreatCase) -> Dict[str, Any]:
@@ -143,7 +88,7 @@ def _serialize_threat_case(case: ThreatCase) -> Dict[str, Any]:
 
     # Normalize timestamp
     if 'collected_at' in case_data:
-        case_data['collected_at'] = _normalize_timestamp(case_data['collected_at'])
+        case_data['collected_at'] = normalize_timestamp(case_data['collected_at'])
 
     return case_data
 
@@ -191,7 +136,7 @@ class AgentOrchestrator:
                 mapping_service, package_payload, force, progress_cb
             )
             if not cve_ids:
-                cve_ids = _fallback_cves(package_payload.package)
+                cve_ids = _fallback_provider.fallback_cves(package_payload.package)
 
             # Only persist to DB if session is available
             if session and mapping_repo:
@@ -217,7 +162,7 @@ class AgentOrchestrator:
                         await epss_repo.upsert_score(
                             cve_id,
                             float(epss_record.get("epss_score", 0.0)),
-                            _ensure_datetime(epss_record.get("collected_at")),
+                            ensure_datetime(epss_record.get("collected_at")),
                         )
                 except Exception as exc:
                     await session.rollback()
@@ -231,7 +176,7 @@ class AgentOrchestrator:
                             cve_id,
                             float(cvss_record.get("cvss_score", 0.0)),
                             cvss_record.get("vector"),
-                            _ensure_datetime(cvss_record.get("collected_at")),
+                            ensure_datetime(cvss_record.get("collected_at")),
                         )
                     await session.commit()
                 except Exception as exc:
@@ -288,7 +233,7 @@ class AgentOrchestrator:
                             risk_level=analysis_output.risk_level,
                             recommendations=analysis_output.recommendations,
                             analysis_summary=analysis_output.analysis_summary,
-                            generated_at=_ensure_datetime(analysis_output.generated_at),
+                            generated_at=ensure_datetime(analysis_output.generated_at),
                         )
                         await session.commit()
                     except Exception as exc:
@@ -309,21 +254,21 @@ class AgentOrchestrator:
                         "cve_id": cve_id,
                         "epss": {
                             "epss_score": float(epss_val) if epss_val is not None else None,
-                            "collected_at": _normalize_timestamp(
+                            "collected_at": normalize_timestamp(
                                 epss_record.get("collected_at")
                             ),
                         },
                         "cvss": {
                             "cvss_score": float(cvss_val) if cvss_val is not None else None,
                             "vector": cvss_record.get("vector"),
-                            "collected_at": _normalize_timestamp(
+                            "collected_at": normalize_timestamp(
                                 cvss_record.get("collected_at")
                             ),
                         },
                         "cases": serialized_cases,
                         "analysis": {
                             **analysis_output.dict(),
-                            "generated_at": _normalize_timestamp(
+                            "generated_at": normalize_timestamp(
                                 analysis_output.generated_at
                             ),
                         },
@@ -364,7 +309,7 @@ class AgentOrchestrator:
             mapping_service.fetch_cves(
                 package_payload.package, package_payload.version_range
             ),
-            fallback=lambda: _fallback_cves(package_payload.package),
+            fallback=lambda: _fallback_provider.fallback_cves(package_payload.package),
             step="MAPPING",
             progress_cb=progress_cb,
         )
@@ -398,7 +343,7 @@ class AgentOrchestrator:
             progress_cb("EPSS", f"{cve_id} 점수 조회 중(Fetching score)")
             epss_results[cve_id] = await _safe_call(
                 epss_service.fetch_score(cve_id),
-                fallback=lambda cid=cve_id: _fallback_epss(cid),
+                fallback=lambda cid=cve_id: _fallback_provider.fallback_epss(cid),
                 step="EPSS",
                 progress_cb=progress_cb,
             )
@@ -434,7 +379,7 @@ class AgentOrchestrator:
             progress_cb("CVSS", f"{cve_id} CVSS 조회 중(Fetching CVSS score)")
             cvss_results[cve_id] = await _safe_call(
                 cvss_service.fetch_score(cve_id),
-                fallback=lambda cid=cve_id: _fallback_cvss(cid),
+                fallback=lambda cid=cve_id: _fallback_provider.fallback_cvss(cid),
                 step="CVSS",
                 progress_cb=progress_cb,
             )
@@ -459,7 +404,7 @@ class AgentOrchestrator:
             progress_cb(
                 "THREAT", f"{threat_payload.cve_id} 위협 수집 건너뛰기(Skipping threat collection)"
             )
-            return _fallback_cases(threat_payload)
+            return _fallback_provider.fallback_threat_cases(threat_payload)
 
         if not force:
             cached = await self._cache.get(cache_key)
@@ -470,7 +415,7 @@ class AgentOrchestrator:
         progress_cb("THREAT", f"{threat_payload.cve_id} 공격 사례 수집 중(Collecting threat cases)")
         threat_response = await _safe_call(
             threat_service.collect(threat_payload),
-            fallback=lambda payload=threat_payload: _fallback_cases(payload),
+            fallback=lambda payload=threat_payload: _fallback_provider.fallback_threat_cases(payload),
             step="THREAT",
             progress_cb=progress_cb,
         )
@@ -514,7 +459,7 @@ class AgentOrchestrator:
         progress_cb("ANALYZE", f"{threat_payload.cve_id} 위험도 평가 중(Analyzing risk)")
         analysis_output = await _safe_call(
             analyzer_service.analyze(analysis_input),
-            fallback=lambda payload=analysis_input: _fallback_analysis(payload),
+            fallback=lambda payload=analysis_input: _fallback_provider.fallback_analysis(payload),
             step="ANALYZE",
             progress_cb=progress_cb,
         )
