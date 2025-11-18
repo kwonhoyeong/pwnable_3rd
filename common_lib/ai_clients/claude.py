@@ -19,12 +19,13 @@ class ClaudeClient(IAIClient):
 
     def __init__(self, base_url: str = "https://api.anthropic.com/v1", timeout: float = 5.0) -> None:
         settings = get_settings()
-        self._base_url = base_url
+        self._base_url = base_url.rstrip("/")
         self._api_key = settings.claude_api_key
         self._timeout = timeout
         self._allow_external = settings.allow_external_calls
         self._default_model = os.getenv("NT_CLAUDE_MODEL", "claude-3-5-sonnet-20240620")
         self._default_max_tokens = 1024
+        self._api_version = os.getenv("NT_CLAUDE_API_VERSION", "2023-06-01")
         if not self._api_key or self._api_key.strip() == "":
             logger.error(
                 "NT_CLAUDE_API_KEY is not set or empty. Claude-powered summaries will fall back to defaults."
@@ -34,15 +35,17 @@ class ClaudeClient(IAIClient):
         """Claude 채팅 호출(Invoke Claude chat)."""
 
         if not self._allow_external:
-            logger.info("Claude external calls disabled; skipping HTTP request.")
-            raise RuntimeError("Claude API disabled by configuration")
+            logger.info(
+                "Claude external calls disabled (set NT_ALLOW_EXTERNAL_CALLS=true to enable)."
+            )
+            raise RuntimeError("Claude API disabled by configuration: NT_ALLOW_EXTERNAL_CALLS=false")
 
         if not self._api_key or self._api_key.strip() == "":
             raise RuntimeError("NT_CLAUDE_API_KEY is not configured")
 
         headers = {
             "x-api-key": self._api_key,
-            "anthropic-version": "2023-06-01",
+            "anthropic-version": self._api_version,
             "content-type": "application/json",
         }
         payload: Dict[str, Any] = {
@@ -60,13 +63,12 @@ class ClaudeClient(IAIClient):
         }
         payload.update(kwargs)
         try:
-            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
-                request = client.post(
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(
                     f"{self._base_url}/messages",
                     headers=headers,
                     json=payload,
                 )
-                response = await asyncio.wait_for(request, timeout=self._timeout)
                 response.raise_for_status()
                 data = response.json()
             content = data.get("content")
