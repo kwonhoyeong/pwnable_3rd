@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from common_lib.ai_clients import PerplexityClient
+from common_lib.config import get_settings
 from common_lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -14,10 +15,15 @@ logger = get_logger(__name__)
 class EPSSService:
     """EPSS 점수 조회 서비스(Service fetching EPSS scores)."""
 
-    def __init__(self, timeout: float = 30.0, max_retries: int = 3) -> None:
+    def __init__(self, timeout: float = 5.0, max_retries: int = 1) -> None:
         self._timeout = timeout
         self._max_retries = max_retries
         self._perplexity = PerplexityClient(timeout=timeout)
+        self._allow_external = get_settings().allow_external_calls
+
+    @staticmethod
+    def _build_response(cve_id: str, score: float = 0.0) -> Dict[str, Any]:
+        return {"cve_id": cve_id, "epss_score": score, "collected_at": datetime.utcnow()}
 
     def _validate_cve_id(self, cve_id: str) -> bool:
         """CVE ID 형식 검증(Validate CVE ID format)."""
@@ -28,10 +34,14 @@ class EPSSService:
     async def fetch_score(self, cve_id: str) -> Dict[str, Any]:
         """EPSS 점수 조회(Fetch EPSS score using Perplexity)."""
 
+        if not self._allow_external:
+            logger.info("외부 EPSS 조회 비활성화됨(External EPSS lookups disabled); returning fallback score.")
+            return self._build_response(cve_id)
+
         # Validate CVE ID to prevent prompt injection
         if not self._validate_cve_id(cve_id):
             logger.warning("Invalid CVE ID format: %s", cve_id)
-            return {"cve_id": cve_id, "epss_score": 0.0, "collected_at": datetime.utcnow()}
+            return self._build_response(cve_id)
 
         prompt = (
             f"Find the current EPSS (Exploit Prediction Scoring System) score for {cve_id}. "
@@ -57,15 +67,13 @@ class EPSSService:
                 }
             except RuntimeError as exc:
                 # Perplexity API errors (no API key, network issues)
-                logger.warning(
-                    "Perplexity API 오류(Perplexity API error for %s, attempt %s): %s",
+                logger.info(
+                    "Perplexity API 호출 불가(Unable to reach Perplexity for %s, attempt %s): %s. 폴백 사용.",
                     cve_id,
                     attempt,
                     exc,
                 )
-                if attempt == self._max_retries:
-                    logger.error("최대 재시도 횟수 도달(Max retries reached for %s)", cve_id)
-                    return {"cve_id": cve_id, "epss_score": 0.0, "collected_at": datetime.utcnow()}
+                return self._build_response(cve_id)
             except Exception as exc:
                 # Unexpected errors
                 logger.error(
@@ -76,9 +84,9 @@ class EPSSService:
                     exc_info=True,
                 )
                 if attempt == self._max_retries:
-                    return {"cve_id": cve_id, "epss_score": 0.0, "collected_at": datetime.utcnow()}
+                    return self._build_response(cve_id)
 
-        return {"cve_id": cve_id, "epss_score": 0.0, "collected_at": datetime.utcnow()}
+        return self._build_response(cve_id)
 
     def _parse_score(self, response: str) -> float:
         """응답에서 EPSS 점수 추출(Extract EPSS score from response)."""
@@ -118,4 +126,3 @@ class EPSSService:
 
         logger.warning("EPSS 점수를 응답에서 찾을 수 없음(Could not parse EPSS score from response): %s", response)
         return 0.0
-

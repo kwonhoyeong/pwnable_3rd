@@ -44,7 +44,8 @@ async def _safe_call(
 
 
 def _fallback_cves(package: str) -> List[str]:
-    return [f"CVE-FAKE-{package.upper()}-0001"]
+    suffix = abs(hash(package)) % 10000
+    return [f"CVE-2025-{suffix:04d}"]
 
 
 def _fallback_epss(cve_id: str) -> Dict[str, Any]:
@@ -53,6 +54,24 @@ def _fallback_epss(cve_id: str) -> Dict[str, Any]:
 
 def _fallback_cvss(cve_id: str) -> Dict[str, Any]:
     return {"cve_id": cve_id, "cvss_score": 5.0, "vector": None, "collected_at": datetime.utcnow()}
+
+
+def _resolve_epss_entry(results: Dict[str, Dict[str, Any]], cve_id: str) -> Dict[str, Any]:
+    entry = results.get(cve_id)
+    if entry is None:
+        logger.warning("Missing EPSS result for %s, using fallback defaults", cve_id)
+        entry = _fallback_epss(cve_id)
+        results[cve_id] = entry
+    return entry
+
+
+def _resolve_cvss_entry(results: Dict[str, Dict[str, Any]], cve_id: str) -> Dict[str, Any]:
+    entry = results.get(cve_id)
+    if entry is None:
+        logger.warning("Missing CVSS result for %s, using fallback defaults", cve_id)
+        entry = _fallback_cvss(cve_id)
+        results[cve_id] = entry
+    return entry
 
 
 def _fallback_cases(payload: ThreatInput) -> ThreatResponse:
@@ -194,7 +213,7 @@ class AgentOrchestrator:
             if session and epss_repo:
                 try:
                     for cve_id in cve_ids:
-                        epss_record = epss_results[cve_id]
+                        epss_record = _resolve_epss_entry(epss_results, cve_id)
                         await epss_repo.upsert_score(
                             cve_id,
                             float(epss_record.get("epss_score", 0.0)),
@@ -207,7 +226,7 @@ class AgentOrchestrator:
             if session and cvss_repo:
                 try:
                     for cve_id in cve_ids:
-                        cvss_record = cvss_results[cve_id]
+                        cvss_record = _resolve_cvss_entry(cvss_results, cve_id)
                         await cvss_repo.upsert_score(
                             cve_id,
                             float(cvss_record.get("cvss_score", 0.0)),
@@ -225,6 +244,8 @@ class AgentOrchestrator:
                     package=package_payload.package,
                     version_range=package_payload.version_range,
                 )
+                epss_record = _resolve_epss_entry(epss_results, cve_id)
+                cvss_record = _resolve_cvss_entry(cvss_results, cve_id)
                 threat_response = await self._threat_agent(
                     threat_service,
                     threat_payload,
@@ -252,8 +273,8 @@ class AgentOrchestrator:
                 analysis_output = await self._analysis_agent(
                     analyzer_service,
                     threat_payload,
-                    epss_results[cve_id],
-                    cvss_results[cve_id],
+                    epss_record,
+                    cvss_record,
                     threat_response,
                     force,
                     progress_cb,
@@ -283,16 +304,16 @@ class AgentOrchestrator:
                         "version_range": package_payload.version_range,
                         "cve_id": cve_id,
                         "epss": {
-                            "epss_score": float(epss_results[cve_id].get("epss_score", 0.0)),
+                            "epss_score": float(epss_record.get("epss_score", 0.0)),
                             "collected_at": _normalize_timestamp(
-                                epss_results[cve_id].get("collected_at")
+                                epss_record.get("collected_at")
                             ),
                         },
                         "cvss": {
-                            "cvss_score": float(cvss_results[cve_id].get("cvss_score", 0.0)),
-                            "vector": cvss_results[cve_id].get("vector"),
+                            "cvss_score": float(cvss_record.get("cvss_score", 0.0)),
+                            "vector": cvss_record.get("vector"),
                             "collected_at": _normalize_timestamp(
-                                cvss_results[cve_id].get("collected_at")
+                                cvss_record.get("collected_at")
                             ),
                         },
                         "cases": serialized_cases,
@@ -304,6 +325,13 @@ class AgentOrchestrator:
                         },
                     }
                 )
+
+        logger.info(
+            "Pipeline completed (package=%s, version=%s, results=%d)",
+            package_payload.package,
+            package_payload.version_range,
+            len(pipeline_results),
+        )
 
         return {
             "package": package_payload.package,
@@ -347,15 +375,22 @@ class AgentOrchestrator:
         force: bool,
         progress_cb: ProgressCallback,
     ) -> Dict[str, Dict[str, Any]]:
+        cve_list = list(cve_ids)
         cache_key = f"epss:{package_payload.package}:{package_payload.version_range}"
+        cached: Optional[Dict[str, Dict[str, Any]]] = None
         if not force:
             cached = await self._cache.get(cache_key)
             if cached is not None:
                 progress_cb("EPSS", "캐시 적중, EPSS 데이터 재사용(Cache hit for EPSS)")
-                return cached
 
-        epss_results: Dict[str, Dict[str, Any]] = {}
-        for cve_id in cve_ids:
+        epss_results: Dict[str, Dict[str, Any]] = dict(cached) if isinstance(cached, dict) else {}
+        missing_ids: List[str] = []
+        for cve_id in cve_list:
+            if cve_id in epss_results:
+                continue
+            missing_ids.append(cve_id)
+
+        for cve_id in missing_ids:
             progress_cb("EPSS", f"{cve_id} 점수 조회 중(Fetching score)")
             epss_results[cve_id] = await _safe_call(
                 epss_service.fetch_score(cve_id),
@@ -364,7 +399,8 @@ class AgentOrchestrator:
                 progress_cb=progress_cb,
             )
 
-        await self._cache.set(cache_key, epss_results)
+        if force or cached is None or missing_ids:
+            await self._cache.set(cache_key, epss_results)
         return epss_results
 
     async def _cvss_agent(
@@ -375,15 +411,22 @@ class AgentOrchestrator:
         force: bool,
         progress_cb: ProgressCallback,
     ) -> Dict[str, Dict[str, Any]]:
+        cve_list = list(cve_ids)
         cache_key = f"cvss:{package_payload.package}:{package_payload.version_range}"
+        cached: Optional[Dict[str, Dict[str, Any]]] = None
         if not force:
             cached = await self._cache.get(cache_key)
             if cached is not None:
                 progress_cb("CVSS", "캐시 적중, CVSS 데이터 재사용(Cache hit for CVSS)")
-                return cached
 
-        cvss_results: Dict[str, Dict[str, Any]] = {}
-        for cve_id in cve_ids:
+        cvss_results: Dict[str, Dict[str, Any]] = dict(cached) if isinstance(cached, dict) else {}
+        missing_ids: List[str] = []
+        for cve_id in cve_list:
+            if cve_id in cvss_results:
+                continue
+            missing_ids.append(cve_id)
+
+        for cve_id in missing_ids:
             progress_cb("CVSS", f"{cve_id} CVSS 조회 중(Fetching CVSS score)")
             cvss_results[cve_id] = await _safe_call(
                 cvss_service.fetch_score(cve_id),
@@ -392,7 +435,8 @@ class AgentOrchestrator:
                 progress_cb=progress_cb,
             )
 
-        await self._cache.set(cache_key, cvss_results)
+        if force or cached is None or missing_ids:
+            await self._cache.set(cache_key, cvss_results)
         return cvss_results
 
     async def _threat_agent(
