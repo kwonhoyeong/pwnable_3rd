@@ -24,6 +24,8 @@ from threat_agent.app.services import ThreatAggregationService
 
 from src.core.fallback import FallbackProvider
 from src.core.utils.timestamps import normalize_timestamp, ensure_datetime
+from src.core.persistence import PersistenceManager
+from src.core.serialization import serialize_threat_case, serialize_pipeline_result
 
 ProgressCallback = Callable[[str, str], None]
 
@@ -67,32 +69,6 @@ def _resolve_cvss_entry(results: Dict[str, Dict[str, Any]], cve_id: str) -> Dict
     return entry
 
 
-def _serialize_threat_case(case: ThreatCase) -> Dict[str, Any]:
-    """Centralized ThreatCase serialization helper to ensure consistent JSON output."""
-    try:
-        from pydantic import HttpUrl
-    except ImportError:
-        HttpUrl = None  # type: ignore
-
-    # Use model_dump for Pydantic v2 compatibility with mode='json' to serialize HttpUrl
-    if hasattr(case, 'model_dump'):
-        case_data = case.model_dump(mode='json')
-    else:
-        # Fallback for Pydantic v1
-        case_data = case.dict()
-        # Manually convert HttpUrl to string
-        if HttpUrl and isinstance(case_data.get('source'), HttpUrl):
-            case_data['source'] = str(case_data['source'])
-        elif 'source' in case_data and hasattr(case_data['source'], '__str__') and not isinstance(case_data['source'], str):
-            case_data['source'] = str(case_data['source'])
-
-    # Normalize timestamp
-    if 'collected_at' in case_data:
-        case_data['collected_at'] = normalize_timestamp(case_data['collected_at'])
-
-    return case_data
-
-
 class AgentOrchestrator:
     """단계별 에이전트를 조율하는 오케스트레이터."""
 
@@ -125,12 +101,8 @@ class AgentOrchestrator:
 
         pipeline_results: List[Dict[str, Any]] = []
         async with get_session() as session:
-            # Initialize repositories only if session is available
-            mapping_repo = MappingRepository(session) if session else None
-            epss_repo = EPSSRepository(session) if session else None
-            cvss_repo = CVSSRepository(session) if session else None
-            threat_repo = ThreatRepository(session) if session else None
-            analysis_repo = AnalysisRepository(session) if session else None
+            # Initialize PersistenceManager for database operations
+            persistence_manager = PersistenceManager(session)
 
             cve_ids = await self._mapping_agent(
                 mapping_service, package_payload, force, progress_cb
@@ -138,50 +110,19 @@ class AgentOrchestrator:
             if not cve_ids:
                 cve_ids = _fallback_provider.fallback_cves(package_payload.package)
 
-            # Only persist to DB if session is available
-            if session and mapping_repo:
-                try:
-                    await mapping_repo.upsert_mapping(
-                        package_payload.package, package_payload.version_range, cve_ids
-                    )
-                    await session.commit()
-                except Exception as exc:
-                    await session.rollback()
-                    logger.warning("Failed to persist mapping to DB: %s", exc)
+            # Persist mappings if session is available
+            await persistence_manager.persist_mappings(
+                package_payload.package, package_payload.version_range, cve_ids
+            )
 
             epss_results, cvss_results = await asyncio.gather(
                 self._epss_agent(epss_service, cve_ids, package_payload, force, progress_cb),
                 self._cvss_agent(cvss_service, cve_ids, package_payload, force, progress_cb),
             )
 
-            # Only persist to DB if session is available
-            if session and epss_repo:
-                try:
-                    for cve_id in cve_ids:
-                        epss_record = _resolve_epss_entry(epss_results, cve_id)
-                        await epss_repo.upsert_score(
-                            cve_id,
-                            float(epss_record.get("epss_score", 0.0)),
-                            ensure_datetime(epss_record.get("collected_at")),
-                        )
-                except Exception as exc:
-                    await session.rollback()
-                    logger.warning("Failed to persist EPSS to DB: %s", exc)
-
-            if session and cvss_repo:
-                try:
-                    for cve_id in cve_ids:
-                        cvss_record = _resolve_cvss_entry(cvss_results, cve_id)
-                        await cvss_repo.upsert_score(
-                            cve_id,
-                            float(cvss_record.get("cvss_score", 0.0)),
-                            cvss_record.get("vector"),
-                            ensure_datetime(cvss_record.get("collected_at")),
-                        )
-                    await session.commit()
-                except Exception as exc:
-                    await session.rollback()
-                    logger.warning("Failed to persist CVSS to DB: %s", exc)
+            # Persist EPSS and CVSS scores if session is available
+            await persistence_manager.persist_epss_scores(epss_results)
+            await persistence_manager.persist_cvss_scores(cvss_results)
 
             for cve_id in cve_ids:
                 threat_payload = ThreatInput(
@@ -199,21 +140,14 @@ class AgentOrchestrator:
                     progress_cb,
                 )
 
-                # Only persist to DB if session is available
-                if session and threat_repo:
-                    try:
-                        # Use centralized serialization helper
-                        serialized_db_cases = [_serialize_threat_case(case) for case in threat_response.cases]
-
-                        await threat_repo.upsert_cases(
-                            threat_payload.cve_id,
-                            threat_payload.package,
-                            threat_payload.version_range,
-                            serialized_db_cases,
-                        )
-                    except Exception as exc:
-                        await session.rollback()
-                        logger.warning("Failed to persist threat cases to DB: %s", exc)
+                # Persist threat cases if session is available
+                serialized_cases_db = [serialize_threat_case(case) for case in threat_response.cases]
+                await persistence_manager.persist_threat_cases(
+                    threat_payload.cve_id,
+                    threat_payload.package,
+                    threat_payload.version_range,
+                    serialized_cases_db,
+                )
 
                 analysis_output = await self._analysis_agent(
                     analyzer_service,
@@ -225,55 +159,26 @@ class AgentOrchestrator:
                     progress_cb,
                 )
 
-                # Only persist to DB if session is available
-                if session and analysis_repo:
-                    try:
-                        await analysis_repo.upsert_analysis(
-                            cve_id=analysis_output.cve_id,
-                            risk_level=analysis_output.risk_level,
-                            recommendations=analysis_output.recommendations,
-                            analysis_summary=analysis_output.analysis_summary,
-                            generated_at=ensure_datetime(analysis_output.generated_at),
-                        )
-                        await session.commit()
-                    except Exception as exc:
-                        await session.rollback()
-                        logger.warning("Failed to persist analysis to DB: %s", exc)
-
-                # Use centralized serialization helper
-                serialized_cases = [_serialize_threat_case(case) for case in threat_response.cases]
-
-                # Handle None values for EPSS and CVSS scores
-                epss_val = epss_record.get("epss_score")
-                cvss_val = cvss_record.get("cvss_score")
-
-                pipeline_results.append(
-                    {
-                        "package": package_payload.package,
-                        "version_range": package_payload.version_range,
-                        "cve_id": cve_id,
-                        "epss": {
-                            "epss_score": float(epss_val) if epss_val is not None else None,
-                            "collected_at": normalize_timestamp(
-                                epss_record.get("collected_at")
-                            ),
-                        },
-                        "cvss": {
-                            "cvss_score": float(cvss_val) if cvss_val is not None else None,
-                            "vector": cvss_record.get("vector"),
-                            "collected_at": normalize_timestamp(
-                                cvss_record.get("collected_at")
-                            ),
-                        },
-                        "cases": serialized_cases,
-                        "analysis": {
-                            **analysis_output.dict(),
-                            "generated_at": normalize_timestamp(
-                                analysis_output.generated_at
-                            ),
-                        },
-                    }
+                # Persist analysis if session is available
+                await persistence_manager.persist_analysis(
+                    cve_id=analysis_output.cve_id,
+                    risk_level=analysis_output.risk_level,
+                    recommendations=analysis_output.recommendations,
+                    analysis_summary=analysis_output.analysis_summary,
+                    generated_at=analysis_output.generated_at,
                 )
+
+                # Serialize complete pipeline result
+                result = serialize_pipeline_result(
+                    package=package_payload.package,
+                    version_range=package_payload.version_range,
+                    cve_id=cve_id,
+                    epss_record=epss_record,
+                    cvss_record=cvss_record,
+                    threat_response=threat_response,
+                    analysis_output=analysis_output,
+                )
+                pipeline_results.append(result)
 
         logger.info(
             "Pipeline completed (package=%s, version=%s, results=%d)",
