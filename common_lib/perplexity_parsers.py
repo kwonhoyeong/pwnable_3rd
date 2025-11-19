@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 def _load_json_blob(raw_text: str) -> Optional[dict]:
@@ -63,3 +63,37 @@ def parse_cvss_response(raw_text: str) -> Tuple[Optional[float], Optional[str], 
         return score_value, vector, source
 
     return None, vector, source
+
+
+def normalize_cve_ids(cve_ids: List[str]) -> List[str]:
+    """Normalize a list of CVE identifiers to uppercase and deduplicate."""
+
+    normalized: List[str] = []
+    seen: set[str] = set()
+    for entry in cve_ids:
+        if not isinstance(entry, str):
+            continue
+        candidate = entry.strip().upper()
+        if not candidate.startswith("CVE-"):
+            continue
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+
+    return normalized
+
+
+def parse_cve_mapping_response(raw_text: str) -> Tuple[List[str], Optional[str]]:
+    """Extract a list of CVE identifiers and optional source from Perplexity output."""
+
+    data = _load_json_blob(raw_text)
+    if data is None:
+        return [], None
+
+    raw_ids = data.get("cve_ids")
+    if not isinstance(raw_ids, list):
+        return [], data.get("source")
+
+    normalized = normalize_cve_ids(raw_ids)
+    return normalized, data.get("source")

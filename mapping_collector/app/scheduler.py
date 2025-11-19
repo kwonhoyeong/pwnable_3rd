@@ -47,14 +47,17 @@ class MappingScheduler:
                 package_name = str(job["package"])
                 version_range = str(job["version_range"])
                 ecosystem = str(job.get("ecosystem") or "npm")
-                cve_ids = await self._service.fetch_cves(package_name, version_range, ecosystem)
+                cve_ids, source = await self._service.fetch_cves(package_name, version_range, ecosystem)
                 mapping = PackageMapping(
                     package=package_name,
                     version_range=version_range,
                     ecosystem=ecosystem,
                     cve_ids=cve_ids,
                     collected_at=datetime.utcnow(),
+                    source=source,
                 )
-                await repository.upsert_mapping(mapping.package, mapping.version_range, mapping.ecosystem, mapping.cve_ids)
+                await repository.upsert_mapping(
+                    mapping.package, mapping.version_range, mapping.ecosystem, mapping.cve_ids
+                )
                 await repository.mark_processed(int(job["id"]))
             await session.commit()

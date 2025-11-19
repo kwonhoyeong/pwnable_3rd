@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -24,3 +24,4 @@ class PackageMapping(BaseModel):
     ecosystem: str = "npm"
     cve_ids: List[str]
     collected_at: datetime
+    source: Optional[str] = None  # 데이터 출처 (Data source: e.g., "Perplexity", "NVD")
