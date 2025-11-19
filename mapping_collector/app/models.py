@@ -12,6 +12,7 @@ class PackageInput(BaseModel):
 
     package: str = Field(..., description="패키지 이름(Package name)")
     version_range: str = Field(..., description="버전 범위(Version range)")
+    ecosystem: str = Field(default="npm", description="패키지 생태계(Ecosystem)")
     collected_at: datetime = Field(..., description="수집 시각(Collection timestamp)")
 
 
@@ -20,6 +21,6 @@ class PackageMapping(BaseModel):
 
     package: str
     version_range: str
+    ecosystem: str = "npm"
     cve_ids: List[str]
     collected_at: datetime
-

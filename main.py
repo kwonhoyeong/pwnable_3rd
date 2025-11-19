@@ -28,6 +28,7 @@ async def run_pipeline(
     version_range: str,
     skip_threat_agent: bool,
     force: bool,
+    ecosystem: str = "npm",
     progress_cb: ProgressCallback = _default_progress,
 ) -> Dict[str, Any]:
     """전체 파이프라인을 실행하고 결과 반환(Run the full pipeline and return results)."""
@@ -38,6 +39,7 @@ async def run_pipeline(
         version_range=version_range,
         skip_threat_agent=skip_threat_agent,
         force=force,
+        ecosystem=ecosystem,
         progress_cb=progress_cb,
     )
 
@@ -62,6 +64,12 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="캐시 무시 후 강제 조회(Force refresh by bypassing cache)",
     )
+    parser.add_argument(
+        "--ecosystem",
+        default="npm",
+        choices=["npm", "pip", "apt"],
+        help="패키지 생태계(Ecosystem) 선택",
+    )
     return parser.parse_args(argv)
 
 
@@ -73,6 +81,7 @@ async def main_async(args: argparse.Namespace) -> None:
         version_range=args.version_range,
         skip_threat_agent=args.skip_threat_agent,
         force=args.force,
+        ecosystem=args.ecosystem,
         progress_cb=_default_progress,
     )
     logger.info("Pipeline run completed; emitting JSON result.")

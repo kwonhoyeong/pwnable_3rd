@@ -172,6 +172,7 @@ class AgentOrchestrator:
         skip_threat_agent: bool,
         force: bool,
         progress_cb: ProgressCallback,
+        ecosystem: str = "npm",
     ) -> Dict[str, Any]:
         progress_cb("INIT", "서비스 초기화 중(Initializing services)")
         if force:
@@ -186,6 +187,7 @@ class AgentOrchestrator:
         package_payload = PackageInput(
             package=package,
             version_range=version_range,
+            ecosystem=ecosystem,
             collected_at=datetime.utcnow(),
         )
 
@@ -208,7 +210,10 @@ class AgentOrchestrator:
             if session and mapping_repo:
                 try:
                     await mapping_repo.upsert_mapping(
-                        package_payload.package, package_payload.version_range, cve_ids
+                        package_payload.package,
+                        package_payload.version_range,
+                        package_payload.ecosystem,
+                        cve_ids,
                     )
                     await session.commit()
                 except Exception as exc:
@@ -263,6 +268,7 @@ class AgentOrchestrator:
                     skip_threat_agent,
                     force,
                     progress_cb,
+                    package_payload.ecosystem,
                 )
 
                 # Only persist to DB if session is available
@@ -289,6 +295,7 @@ class AgentOrchestrator:
                     threat_response,
                     force,
                     progress_cb,
+                    package_payload.ecosystem,
                 )
 
                 # Only persist to DB if session is available
@@ -349,6 +356,7 @@ class AgentOrchestrator:
         return {
             "package": package_payload.package,
             "version_range": package_payload.version_range,
+            "ecosystem": package_payload.ecosystem,
             "generated_at": datetime.utcnow().isoformat(),
             "results": pipeline_results,
         }
@@ -360,7 +368,9 @@ class AgentOrchestrator:
         force: bool,
         progress_cb: ProgressCallback,
     ) -> List[str]:
-        cache_key = f"mapping:{package_payload.package}:{package_payload.version_range}"
+        cache_key = (
+            f"mapping:{package_payload.ecosystem}:{package_payload.package}:{package_payload.version_range}"
+        )
         cached: Optional[List[str]] = None
         if not force:
             cached = await self._cache.get(cache_key)
@@ -371,7 +381,7 @@ class AgentOrchestrator:
         progress_cb("MAPPING", f"{package_payload.package} 패키지의 CVE 조회(Fetching CVEs)")
         cve_ids = await _safe_call(
             mapping_service.fetch_cves(
-                package_payload.package, package_payload.version_range
+                package_payload.package, package_payload.version_range, package_payload.ecosystem
             ),
             fallback=lambda: _fallback_cves(package_payload.package),
             step="MAPPING",
@@ -389,7 +399,9 @@ class AgentOrchestrator:
         progress_cb: ProgressCallback,
     ) -> Dict[str, Dict[str, Any]]:
         cve_list = list(cve_ids)
-        cache_key = f"epss:{package_payload.package}:{package_payload.version_range}"
+        cache_key = (
+            f"epss:{package_payload.ecosystem}:{package_payload.package}:{package_payload.version_range}"
+        )
         cached: Optional[Dict[str, Dict[str, Any]]] = None
         if not force:
             cached = await self._cache.get(cache_key)
@@ -425,7 +437,9 @@ class AgentOrchestrator:
         progress_cb: ProgressCallback,
     ) -> Dict[str, Dict[str, Any]]:
         cve_list = list(cve_ids)
-        cache_key = f"cvss:{package_payload.package}:{package_payload.version_range}"
+        cache_key = (
+            f"cvss:{package_payload.ecosystem}:{package_payload.package}:{package_payload.version_range}"
+        )
         cached: Optional[Dict[str, Dict[str, Any]]] = None
         if not force:
             cached = await self._cache.get(cache_key)
@@ -459,9 +473,10 @@ class AgentOrchestrator:
         skip_threat_agent: bool,
         force: bool,
         progress_cb: ProgressCallback,
+        ecosystem: str,
     ) -> ThreatResponse:
         cache_key = (
-            f"threat:{threat_payload.package}:{threat_payload.version_range}:{threat_payload.cve_id}"
+            f"threat:{ecosystem}:{threat_payload.package}:{threat_payload.version_range}:{threat_payload.cve_id}"
         )
 
         if skip_threat_agent:
@@ -496,9 +511,10 @@ class AgentOrchestrator:
         threat_response: ThreatResponse,
         force: bool,
         progress_cb: ProgressCallback,
+        ecosystem: str,
     ) -> AnalyzerOutput:
         cache_key = (
-            f"analysis:{threat_payload.package}:{threat_payload.version_range}:{threat_payload.cve_id}"
+            f"analysis:{ecosystem}:{threat_payload.package}:{threat_payload.version_range}:{threat_payload.cve_id}"
         )
 
         if not force:

@@ -17,25 +17,33 @@ class MappingRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def upsert_mapping(self, package: str, version_range: str, cve_ids: List[str]) -> None:
+    async def upsert_mapping(self, package: str, version_range: str, ecosystem: str, cve_ids: List[str]) -> None:
         """매핑 정보를 저장/업데이트(Save or update mapping data)."""
 
         query = text(
             """
-            INSERT INTO package_cve_mapping (package, version_range, cve_ids)
-            VALUES (:package, :version_range, :cve_ids)
-            ON CONFLICT (package, version_range)
+            INSERT INTO package_cve_mapping (package, version_range, ecosystem, cve_ids)
+            VALUES (:package, :version_range, :ecosystem, :cve_ids)
+            ON CONFLICT (package, version_range, ecosystem)
             DO UPDATE SET cve_ids = EXCLUDED.cve_ids, updated_at = NOW()
             """
         )
-        await self._session.execute(query, {"package": package, "version_range": version_range, "cve_ids": cve_ids})
+        await self._session.execute(
+            query,
+            {
+                "package": package,
+                "version_range": version_range,
+                "ecosystem": ecosystem,
+                "cve_ids": cve_ids,
+            },
+        )
 
     async def list_pending_packages(self) -> List[dict[str, object]]:
         """수집 대기 패키지 목록(Look up pending packages)."""
 
         query = text(
             """
-            SELECT id, package, version_range
+            SELECT id, package, version_range, ecosystem
             FROM package_scan_queue
             WHERE processed = false
             ORDER BY created_at ASC
@@ -45,7 +53,7 @@ class MappingRepository:
         result = await self._session.execute(query)
         rows = result.fetchall()
         return [
-            {"id": row.id, "package": row.package, "version_range": row.version_range}
+            {"id": row.id, "package": row.package, "version_range": row.version_range, "ecosystem": row.ecosystem}
             for row in rows
         ]
 

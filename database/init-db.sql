@@ -6,10 +6,11 @@ CREATE TABLE IF NOT EXISTS package_cve_mapping (
     id SERIAL PRIMARY KEY,
     package TEXT NOT NULL,
     version_range TEXT NOT NULL,
+    ecosystem TEXT NOT NULL DEFAULT 'npm',
     cve_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (package, version_range)
+    UNIQUE (package, version_range, ecosystem)
 );
 
 -- 수집 대기 큐 테이블(Collection queue table)
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS package_scan_queue (
     id SERIAL PRIMARY KEY,
     package TEXT NOT NULL,
     version_range TEXT NOT NULL,
+    ecosystem TEXT NOT NULL DEFAULT 'npm',
     processed BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -54,12 +56,12 @@ CREATE TABLE IF NOT EXISTS analysis_results (
 );
 
 -- 샘플 데이터 삽입(Seed sample data)
-INSERT INTO package_cve_mapping (package, version_range, cve_ids)
-VALUES ('lodash', '<4.17.21', ARRAY['CVE-2023-1234', 'CVE-2022-5678'])
-ON CONFLICT (package, version_range) DO NOTHING;
+INSERT INTO package_cve_mapping (package, version_range, ecosystem, cve_ids)
+VALUES ('lodash', '<4.17.21', 'npm', ARRAY['CVE-2023-1234', 'CVE-2022-5678'])
+ON CONFLICT (package, version_range, ecosystem) DO NOTHING;
 
-INSERT INTO package_scan_queue (package, version_range, processed)
-VALUES ('lodash', '<4.17.21', TRUE)
+INSERT INTO package_scan_queue (package, version_range, ecosystem, processed)
+VALUES ('lodash', '<4.17.21', 'npm', TRUE)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO epss_scores (cve_id, epss_score, collected_at)
