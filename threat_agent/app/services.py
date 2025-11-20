@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 import re
-from typing import List
+from typing import List, Optional, Dict, Any
 from urllib.parse import urlparse, urlunparse
 
 from common_lib.ai_clients import ClaudeClient, PerplexityClient
@@ -55,6 +56,115 @@ def _sanitize_case(case: ThreatCase) -> ThreatCase:
     )
 
 
+def _extract_severity(text: str) -> str:
+    """텍스트에서 심각도 결정(Determine severity from text content)."""
+
+    text_lower = text.lower()
+
+    # Critical indicators
+    if any(word in text_lower for word in ["critical", "critical vulnerability", "remote code execution", "rce", "exploit actively"]):
+        return "CRITICAL"
+
+    # High indicators
+    if any(word in text_lower for word in ["exploit", "vulnerability", "breach", "attack", "compromised", "unauthorized access", "privilege escalation"]):
+        return "HIGH"
+
+    # Medium is default
+    return "MEDIUM"
+
+
+def _try_parse_json(text: str) -> Optional[Dict[str, Any]]:
+    """JSON 파싱 시도(Attempt to parse JSON from text)."""
+
+    try:
+        # Try to find JSON object in the text
+        start_idx = text.find("{")
+        if start_idx == -1:
+            return None
+
+        end_idx = text.rfind("}")
+        if end_idx == -1 or end_idx <= start_idx:
+            return None
+
+        json_str = text[start_idx:end_idx + 1]
+        return json.loads(json_str)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
+def _parse_threat_case(raw_answer: str, cve_id: str) -> ThreatCase:
+    """AI 응답에서 위협 사례 추출(Extract threat case from AI response)."""
+
+    title = "Threat Case"
+    summary = raw_answer
+    source = f"https://www.cve.org/CVERecord?id={cve_id}"
+
+    # Try JSON parsing first
+    parsed_json = _try_parse_json(raw_answer)
+    if parsed_json:
+        title = parsed_json.get("title") or parsed_json.get("name") or title
+        summary = parsed_json.get("summary") or parsed_json.get("description") or raw_answer
+        source = parsed_json.get("source") or parsed_json.get("url") or source
+        logger.debug("Parsed threat case from JSON response")
+    else:
+        # Parse unstructured text: use first sentence as title
+        sentences = [s.strip() for s in re.split(r"[.!?]+", raw_answer) if s.strip()]
+        if sentences:
+            title = sentences[0]
+            summary = ". ".join(sentences[1:]) if len(sentences) > 1 else raw_answer
+        else:
+            summary = raw_answer
+
+        # Try to extract URL from text if it looks like a source
+        url_pattern = r"https?://[^\s]+"
+        urls = re.findall(url_pattern, raw_answer)
+        if urls:
+            potential_source = urls[0]
+            if _is_valid_source_url(potential_source):
+                source = potential_source
+                logger.debug("Extracted source URL from text: %s", source)
+
+    # Ensure title and summary are not empty
+    if not title or not title.strip():
+        title = f"Threat details for {cve_id}"
+    if not summary or not summary.strip():
+        summary = raw_answer
+
+    # Sanitize all fields
+    sanitized_title = _sanitize_text(title, _MAX_TITLE_LEN)
+    sanitized_summary = _sanitize_text(summary, _MAX_SUMMARY_LEN)
+    sanitized_source = _sanitize_source(source)
+
+    # Determine severity from summary + title
+    severity = _extract_severity(f"{sanitized_title} {sanitized_summary}")
+
+    return ThreatCase(
+        source=sanitized_source,
+        title=sanitized_title,
+        date=datetime.utcnow().date().isoformat(),
+        summary=sanitized_summary,
+        collected_at=datetime.utcnow(),
+    )
+
+
+def _is_valid_source_url(url: str) -> bool:
+    """URL이 유효한 위협 소스인지 확인(Validate if URL is a reasonable threat source)."""
+
+    try:
+        parsed = urlparse(url.strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return False
+
+        # Filter out obvious non-source URLs
+        invalid_domains = ["example.com", "localhost", "127.0.0.1"]
+        if any(domain in parsed.netloc for domain in invalid_domains):
+            return False
+
+        return True
+    except Exception:
+        return False
+
+
 class ThreatSearchService:
     """Perplexity 검색 서비스(Perplexity search service)."""
 
@@ -70,17 +180,19 @@ class ThreatSearchService:
             cve_id=payload.cve_id,
         )
         raw_answer = await self._client.chat(prompt)
-        # Skeleton: parse logic placeholder
         logger.debug("Perplexity raw answer: %s", raw_answer)
-        return [
-            ThreatCase(
-                source=_sanitize_source("https://example.com/exploit-detail"),
-                title=_sanitize_text(f"Sample case for {payload.cve_id}", _MAX_TITLE_LEN),
-                date=datetime.utcnow().date().isoformat(),
-                summary=_sanitize_text(raw_answer[:200]),
-                collected_at=datetime.utcnow(),
-            )
-        ]
+
+        # Parse the actual threat data from the response
+        threat_case = _parse_threat_case(raw_answer, payload.cve_id)
+
+        logger.info(
+            "Extracted threat case for %s: title=%s, severity=%s",
+            payload.cve_id,
+            threat_case.title[:50],
+            "N/A",  # Note: severity is computed but not stored in ThreatCase model
+        )
+
+        return [threat_case]
 
 
 class ThreatSummaryService:

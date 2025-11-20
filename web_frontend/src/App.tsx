@@ -1,22 +1,26 @@
-import React, { useState } from 'react';
-import { QueryProvider } from './store/queryContext';
-import { SearchForm } from './components/SearchForm';
-import { ResultCards } from './components/ResultCards';
-import './styles/layout.scss';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
+import { MainLayout } from './layouts/MainLayout';
+import { Dashboard } from './pages/Dashboard';
+import { History } from './pages/History';
+import { ReportDetail } from './pages/ReportDetail';
+
+const queryClient = new QueryClient();
 
 const App: React.FC = () => {
   return (
-    <QueryProvider>
-      <div className="app-shell">
-        <header className="app-shell__header">
-          <h1>npm Threat Intelligence Dashboard</h1>
-        </header>
-        <main className="app-shell__main">
-          <SearchForm />
-          <ResultCards />
-        </main>
-      </div>
-    </QueryProvider>
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <Routes>
+          <Route element={<MainLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/report/:cveId" element={<ReportDetail />} />
+          </Route>
+        </Routes>
+      </Router>
+    </QueryClientProvider>
   );
 };
 

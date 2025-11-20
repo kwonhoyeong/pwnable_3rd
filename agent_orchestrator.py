@@ -2,8 +2,18 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import sys
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional
+
+import httpx
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from analyzer.app.models import AnalyzerInput, AnalyzerOutput
 from analyzer.app.repository import AnalysisRepository
@@ -11,6 +21,7 @@ from analyzer.app.service import AnalyzerService
 from common_lib.cache import AsyncCache
 from common_lib.db import get_session
 from common_lib.logger import get_logger
+from common_lib.retry_config import _is_retryable_exception
 from cvss_fetcher.app.repository import CVSSRepository
 from cvss_fetcher.app.service import CVSSService
 from epss_fetcher.app.repository import EPSSRepository
@@ -21,6 +32,8 @@ from mapping_collector.app.service import MappingService
 from threat_agent.app.models import ThreatCase, ThreatInput, ThreatResponse
 from threat_agent.app.repository import ThreatRepository
 from threat_agent.app.services import ThreatAggregationService
+
+print("🚀 [DEBUG] Orchestrator script loaded", flush=True)
 
 ProgressCallback = Callable[[str, str], None]
 
@@ -33,10 +46,33 @@ async def _safe_call(
     step: str,
     progress_cb: ProgressCallback,
 ) -> Any:
-    """에이전트 호출 안전 래퍼."""
+    """에이전트 호출 안전 래퍼(Safe wrapper for agent calls with retry logic).
+
+    Attempts to execute the coroutine with exponential backoff retry on transient errors.
+    If all retries are exhausted, falls back to the fallback function.
+
+    Args:
+        coro: Awaitable coroutine to execute
+        fallback: Fallback function to call if all retries fail
+        step: Step name for logging and progress callback
+        progress_cb: Callback for progress updates
+
+    Returns:
+        Result from coroutine or fallback function
+    """
+    # Create a retrying strategy with exponential backoff
+    retry_strategy = AsyncRetrying(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=4),
+        retry=retry_if_exception(_is_retryable_exception),
+        reraise=True,
+    )
 
     try:
-        return await coro
+        # Use AsyncRetrying to wrap the coroutine
+        async for attempt in retry_strategy:
+            with attempt:
+                return await coro
     except Exception as exc:  # pragma: no cover - defensive logging
         progress_cb(step, f"오류 발생, 대체 경로 사용(Error occurred, using fallback): {exc}")
         logger.warning("%s 단계에서 예외 발생", step, exc_info=exc)
@@ -304,6 +340,7 @@ class AgentOrchestrator:
                         await analysis_repo.upsert_analysis(
                             cve_id=analysis_output.cve_id,
                             risk_level=analysis_output.risk_level,
+                            risk_score=analysis_output.risk_score,
                             recommendations=analysis_output.recommendations,
                             analysis_summary=analysis_output.analysis_summary,
                             generated_at=_ensure_datetime(analysis_output.generated_at),
@@ -542,3 +579,97 @@ class AgentOrchestrator:
 
         await self._cache.set(cache_key, analysis_output.dict())
         return analysis_output
+
+
+async def main() -> None:
+    """메인 오케스트레이터 진입점(Main orchestrator entry point)."""
+    import argparse
+    import uuid
+
+    from common_lib.observability import request_id_ctx
+
+    # Generate request ID for this orchestrator run (for distributed tracing)
+    request_id = str(uuid.uuid4())
+    request_id_ctx.set(request_id)
+
+    parser = argparse.ArgumentParser(
+        description="AI agent-based threat intelligence pipeline orchestrator"
+    )
+    parser.add_argument(
+        "--package",
+        required=True,
+        help="Package name (e.g., lodash, express)",
+    )
+    parser.add_argument(
+        "--version-range",
+        required=True,
+        help="Version range (e.g., '<4.17.21', '<=1.2.3')",
+    )
+    parser.add_argument(
+        "--ecosystem",
+        default="npm",
+        choices=["npm", "pip", "apt"],
+        help="Package ecosystem",
+    )
+    parser.add_argument(
+        "--skip-threat",
+        action="store_true",
+        help="Skip threat intelligence collection",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force refresh, bypass cache",
+    )
+
+    args = parser.parse_args()
+
+    def progress_callback(step: str, message: str) -> None:
+        """Progress callback that prints to stdout."""
+        print(f"[{step}] {message}", flush=True)
+
+    orchestrator = AgentOrchestrator()
+
+    print(f"🚀 [ORCHESTRATOR] Starting pipeline for {args.package} ({args.version_range}) [request_id={request_id}]", flush=True)
+    try:
+        result = await orchestrator.orchestrate_pipeline(
+            package=args.package,
+            version_range=args.version_range,
+            skip_threat_agent=args.skip_threat,
+            force=args.force,
+            progress_cb=progress_callback,
+            ecosystem=args.ecosystem,
+        )
+
+        print("\n✅ [ORCHESTRATOR] Pipeline completed successfully", flush=True)
+        print(f"\n📊 Results:\n{result}", flush=True)
+
+        return result
+    except KeyboardInterrupt:
+        print("\n🛑 Orchestrator stopped by user.", flush=True)
+    except Exception as e:
+        print(f"\n❌ Fatal Error: {e}", flush=True)
+        import traceback
+
+        traceback.print_exc()
+        raise
+
+
+if __name__ == "__main__":
+    # Configure logging to print to stdout
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+
+    print("🚀 [DEBUG] Starting Orchestrator Main Loop...", flush=True)
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n🛑 Orchestrator stopped by user.")
+    except Exception as e:
+        print(f"\n❌ Fatal Error: {e}")
+        import traceback
+
+        traceback.print_exc()

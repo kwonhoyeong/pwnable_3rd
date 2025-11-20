@@ -23,6 +23,7 @@ class AnalyzerOutput(BaseModel):
 
     cve_id: str
     risk_level: str
+    risk_score: float = Field(..., ge=0.0, le=10.0, description="가중치 기반 위험 점수(Weighted risk score 0-10)")
     recommendations: List[str]
     analysis_summary: str
     generated_at: datetime

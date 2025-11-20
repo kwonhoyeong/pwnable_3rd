@@ -21,6 +21,7 @@ class AnalysisRepository:
         self,
         cve_id: str,
         risk_level: str,
+        risk_score: float,
         recommendations: list[str],
         analysis_summary: str,
         generated_at: datetime,
@@ -29,10 +30,11 @@ class AnalysisRepository:
 
         query = text(
             """
-            INSERT INTO analysis_results (cve_id, risk_level, recommendations, analysis_summary, generated_at)
-            VALUES (:cve_id, :risk_level, :recommendations, :analysis_summary, :generated_at)
+            INSERT INTO analysis_results (cve_id, risk_level, risk_score, recommendations, analysis_summary, generated_at)
+            VALUES (:cve_id, :risk_level, :risk_score, :recommendations, :analysis_summary, :generated_at)
             ON CONFLICT (cve_id)
             DO UPDATE SET risk_level = EXCLUDED.risk_level,
+                          risk_score = EXCLUDED.risk_score,
                           recommendations = EXCLUDED.recommendations,
                           analysis_summary = EXCLUDED.analysis_summary,
                           generated_at = EXCLUDED.generated_at
@@ -43,6 +45,7 @@ class AnalysisRepository:
             {
                 "cve_id": cve_id,
                 "risk_level": risk_level,
+                "risk_score": risk_score,
                 "recommendations": recommendations,
                 "analysis_summary": analysis_summary,
                 "generated_at": generated_at,

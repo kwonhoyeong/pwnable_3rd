@@ -9,6 +9,7 @@ from anthropic import Anthropic
 
 from ..config import get_settings
 from ..logger import get_logger
+from ..retry_config import get_retry_decorator
 from .base import IAIClient
 
 logger = get_logger(__name__)
@@ -31,6 +32,7 @@ class ClaudeClient(IAIClient):
                 "NT_CLAUDE_API_KEY or ANTHROPIC_API_KEY is not set or empty. Claude-powered summaries will fall back to defaults."
             )
 
+    @get_retry_decorator()
     async def chat(self, prompt: str, **kwargs: Any) -> str:
         """Claude 채팅 호출(Invoke Claude chat using Anthropic SDK)."""
 

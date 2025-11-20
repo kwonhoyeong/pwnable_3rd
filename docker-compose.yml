@@ -1,4 +1,59 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: npm-threat-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: npm_threat_db
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nt-network
+
+  redis:
+    image: redis:alpine
+    container_name: npm-threat-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nt-network
+
+  agent-orchestrator:
+    build:
+      context: .
+      dockerfile: analyzer/Dockerfile
+    container_name: npm-threat-agent-orchestrator
+    environment:
+      NT_POSTGRES_DSN: "postgresql+asyncpg://postgres:postgres@postgres:5432/npm_threat_db"
+      NT_REDIS_URL: "redis://redis:6379/0"
+      NT_ENABLE_DATABASE: "true"
+      NT_ENABLE_CACHE: "true"
+      NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+    volumes:
+      - .:/app
+    command: tail -f /dev/null
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nt-network
+
   mapping-collector:
     build:
       context: .
@@ -6,8 +61,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
-      NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
+      NT_POSTGRES_DSN: "postgresql+asyncpg://postgres:postgres@postgres:5432/npm_threat_db"
+      NT_REDIS_URL: "redis://redis:6379/0"
+      NT_ENABLE_DATABASE: "true"
+      NT_ENABLE_CACHE: "true"
+      NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
     volumes:
       - ./common_lib:/app/common_lib
@@ -15,6 +73,11 @@ services:
       - ./data:/app/data
     command: >-
       uvicorn mapping_collector.app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - nt-network
 
@@ -25,8 +88,11 @@ services:
     ports:
       - "8006:8006"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
-      NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
+      NT_POSTGRES_DSN: "postgresql+asyncpg://postgres:postgres@postgres:5432/npm_threat_db"
+      NT_REDIS_URL: "redis://redis:6379/0"
+      NT_ENABLE_DATABASE: "true"
+      NT_ENABLE_CACHE: "true"
+      NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
     volumes:
       - ./common_lib:/app/common_lib
@@ -34,6 +100,11 @@ services:
       - ./data:/app/data
     command: >-
       uvicorn cvss_fetcher.app.main:app --host 0.0.0.0 --port 8006 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - nt-network
 
@@ -44,8 +115,11 @@ services:
     ports:
       - "8001:8001"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
-      NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
+      NT_POSTGRES_DSN: "postgresql+asyncpg://postgres:postgres@postgres:5432/npm_threat_db"
+      NT_REDIS_URL: "redis://redis:6379/0"
+      NT_ENABLE_DATABASE: "true"
+      NT_ENABLE_CACHE: "true"
+      NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
     volumes:
       - ./common_lib:/app/common_lib
@@ -53,6 +127,11 @@ services:
       - ./data:/app/data
     command: >-
       uvicorn epss_fetcher.app.main:app --host 0.0.0.0 --port 8001 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - nt-network
 
@@ -63,8 +142,11 @@ services:
     ports:
       - "8002:8002"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
-      NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
+      NT_POSTGRES_DSN: "postgresql+asyncpg://postgres:postgres@postgres:5432/npm_threat_db"
+      NT_REDIS_URL: "redis://redis:6379/0"
+      NT_ENABLE_DATABASE: "true"
+      NT_ENABLE_CACHE: "true"
+      NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
       NT_PERPLEXITY_API_KEY: "${NT_PERPLEXITY_API_KEY:-}"
       NT_CLAUDE_API_KEY: "${NT_CLAUDE_API_KEY:-}"
       NT_GPT5_API_KEY: "${NT_GPT5_API_KEY:-}"
@@ -75,6 +157,11 @@ services:
       - ./data:/app/data
     command: >-
       uvicorn threat_agent.app.main:app --host 0.0.0.0 --port 8002 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - nt-network
 
@@ -85,8 +172,11 @@ services:
     ports:
       - "8003:8003"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
-      NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
+      NT_POSTGRES_DSN: "postgresql+asyncpg://postgres:postgres@postgres:5432/npm_threat_db"
+      NT_REDIS_URL: "redis://redis:6379/0"
+      NT_ENABLE_DATABASE: "true"
+      NT_ENABLE_CACHE: "true"
+      NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
       NT_CLAUDE_API_KEY: "${NT_CLAUDE_API_KEY:-}"
       NT_GPT5_API_KEY: "${NT_GPT5_API_KEY:-}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
@@ -96,6 +186,11 @@ services:
       - ./data:/app/data
     command: >-
       uvicorn analyzer.app.main:app --host 0.0.0.0 --port 8003 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - nt-network
 
@@ -106,8 +201,11 @@ services:
     ports:
       - "8004:8004"
     environment:
-      NT_DATABASE_URL: "sqlite+aiosqlite:////app/data/threatdb.sqlite"
-      NT_CACHE_TTL: "${NT_CACHE_TTL:-3600}"
+      NT_POSTGRES_DSN: "postgresql+asyncpg://postgres:postgres@postgres:5432/npm_threat_db"
+      NT_REDIS_URL: "redis://redis:6379/0"
+      NT_ENABLE_DATABASE: "true"
+      NT_ENABLE_CACHE: "true"
+      NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
     volumes:
       - ./common_lib:/app/common_lib
@@ -116,6 +214,10 @@ services:
     command: >-
       uvicorn query_api.app.main:app --host 0.0.0.0 --port 8004 --reload
     depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       analyzer:
         condition: service_started
     networks:
@@ -131,6 +233,7 @@ services:
       VITE_QUERY_API_BASE_URL: http://localhost:8004/api/v1
     volumes:
       - ./web_frontend:/app
+      - /app/node_modules
     command: npm run dev -- --host 0.0.0.0
     depends_on:
       query-api:
@@ -141,3 +244,6 @@ services:
 networks:
   nt-network:
     driver: bridge
+
+volumes:
+  postgres_data:

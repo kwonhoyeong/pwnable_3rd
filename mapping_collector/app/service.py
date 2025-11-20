@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import httpx
 
@@ -33,18 +33,23 @@ class MappingService:
 
     async def fetch_cves(
         self, package: str, version_range: str, ecosystem: str = "npm"
-    ) -> Tuple[List[str], Optional[str]]:
-        """외부 소스에서 CVE 목록과 출처 조회(Fetch CVE list and source from external source)."""
+    ) -> List[str]:
+        """외부 소스에서 CVE 목록 조회(Fetch CVE list from external source)."""
 
         if not self._allow_external:
-            return [], None
+            return []
 
         normalized_ecosystem = (ecosystem or "npm").lower()
         cve_ids, source = await self._fetch_with_perplexity(package, version_range, normalized_ecosystem)
         if cve_ids:
-            return cve_ids, source
+            if source:
+                logger.info("CVE fetched from Perplexity (source=%s)", source)
+            return cve_ids
 
-        return await self._fetch_from_feed(package, version_range, normalized_ecosystem)
+        cve_ids, source = await self._fetch_from_feed(package, version_range, normalized_ecosystem)
+        if source:
+            logger.info("CVE fetched from feed (source=%s)", source)
+        return cve_ids
 
     def _resolve_endpoint(self, ecosystem: str) -> str:
         return self._ecosystem_endpoints.get(ecosystem, self._ecosystem_endpoints["npm"])

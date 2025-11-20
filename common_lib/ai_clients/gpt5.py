@@ -9,6 +9,7 @@ import httpx
 
 from ..config import get_settings
 from ..logger import get_logger
+from ..retry_config import get_retry_decorator
 from .base import IAIClient
 
 logger = get_logger(__name__)
@@ -33,6 +34,7 @@ class GPT5Client(IAIClient):
                 "Please set NT_GPT5_API_KEY in your .env file."
             )
 
+    @get_retry_decorator()
     async def chat(self, prompt: str, **kwargs: Any) -> str:
         """GPT-5 채팅 호출(Invoke GPT-5 chat)."""
 

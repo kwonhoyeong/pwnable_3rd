@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from sqlalchemy import text
@@ -35,9 +34,12 @@ async def get_engine() -> AsyncEngine | None:
     return _engine
 
 
-@asynccontextmanager
 async def get_session() -> AsyncIterator[AsyncSession | None]:
-    """세션 컨텍스트 관리자(Session context manager). Returns None if DB is unavailable."""
+    """세션 컨텍스트 관리자(Session context manager for FastAPI Depends).
+
+    Returns an async generator that yields an AsyncSession or None.
+    FastAPI will automatically handle the context lifecycle.
+    """
 
     global _session_factory
     engine = None

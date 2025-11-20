@@ -32,6 +32,16 @@ CREATE TABLE IF NOT EXISTS epss_scores (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- CVSS 점수 테이블(CVSS score table)
+CREATE TABLE IF NOT EXISTS cvss_scores (
+    id SERIAL PRIMARY KEY,
+    cve_id TEXT NOT NULL UNIQUE,
+    cvss_score NUMERIC(4,1),
+    vector TEXT,
+    collected_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- 위협 사례 테이블(Threat cases table)
 CREATE TABLE IF NOT EXISTS threat_cases (
     id SERIAL PRIMARY KEY,
@@ -49,6 +59,7 @@ CREATE TABLE IF NOT EXISTS analysis_results (
     id SERIAL PRIMARY KEY,
     cve_id TEXT NOT NULL UNIQUE,
     risk_level TEXT NOT NULL,
+    risk_score NUMERIC(4,1) NOT NULL,
     recommendations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     analysis_summary TEXT NOT NULL,
     generated_at TIMESTAMPTZ NOT NULL,
@@ -78,10 +89,11 @@ VALUES (
 )
 ON CONFLICT (cve_id, package, version_range) DO NOTHING;
 
-INSERT INTO analysis_results (cve_id, risk_level, recommendations, analysis_summary, generated_at)
+INSERT INTO analysis_results (cve_id, risk_level, risk_score, recommendations, analysis_summary, generated_at)
 VALUES (
     'CVE-2023-1234',
     'High',
+    7.2,
     ARRAY['Upgrade lodash to 4.17.21 or later', 'Review transitive dependencies for vulnerable versions'],
     'Lodash versions below 4.17.21 exhibit a high-risk vulnerability with observed exploitation cases.',
     NOW()

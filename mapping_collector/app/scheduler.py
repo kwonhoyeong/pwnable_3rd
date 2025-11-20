@@ -47,7 +47,8 @@ class MappingScheduler:
                 package_name = str(job["package"])
                 version_range = str(job["version_range"])
                 ecosystem = str(job.get("ecosystem") or "npm")
-                cve_ids, source = await self._service.fetch_cves(package_name, version_range, ecosystem)
+                cve_ids = await self._service.fetch_cves(package_name, version_range, ecosystem)
+                source = "aggregated"  # Default source for scheduler-collected mappings
                 mapping = PackageMapping(
                     package=package_name,
                     version_range=version_range,
