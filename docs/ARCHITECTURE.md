@@ -37,20 +37,24 @@
 
 ### 5. Analysis Stage
 - `AnalyzerAgent`가 CVSS/EPSS 점수와 위협 사례를 종합하여 위험도 평가
-- AI 기반 대응 전략 생성
-- **DB 저장**: `AnalysisRepository.upsert_analysis()`로 분석 결과 저장
+- Claude 시스템 프롬프트(시니어 AppSec 엔지니어 역할)로 Markdown 리포트, GPT5로 권고안 생성
+- **가중치 기반 스코어링**: `risk_score = CVSS*0.4 + (EPSS*10)*0.3 + AI_SCORE*0.3` (AI score는 CRITICAL/HIGH/MEDIUM/LOW → 9.5/7.5/5/2)
+- **DB 저장**: `AnalysisRepository.upsert_analysis()`로 `risk_level`, `risk_score`, `recommendations`, `analysis_summary` 영구 저장
 - **캐시 저장**: 향후 동일 요청 시 재사용
 
 ### 6. Data Serving
-- `QueryAPI`/`WebFrontend`가 PostgreSQL과 Redis를 조회하여 사용자에게 결과 노출
-- 우선순위 기반 정렬 (CVSS, EPSS 점수 기반)
+- `QueryAPI`가 FastAPI 0.121 기반으로 `/api/v1/query`, `/api/v1/history`, `/api/v1/stats`를 제공
+  - Request ID 미들웨어가 모든 응답 헤더/로그에 `X-Request-ID`를 삽입
+  - `/query`는 패키지/CVE별 데이터를 Redis 캐시+DB로부터 불러오고, 대소문자 무관한 위험도 우선순위를 계산
+  - `/history`는 최신 `analysis_results` 기준 페이지네이션, `/stats`는 위험도 카운트를 집계
+- React/Vite 프런트엔드는 `SearchBar`, `StatsCards`, `RiskDistributionChart`, `RecentScansTable` 컴포넌트를 조합해 대시보드를 구성
 
 ## Database Schema Summary
 - `package_cve_mapping(id, package, version_range, cve_ids, created_at, updated_at)`
 - `cvss_scores(id, cve_id, cvss_score, vector, collected_at, created_at)`
 - `epss_scores(id, cve_id, epss_score, collected_at)`
 - `threat_cases(id, cve_id, package, source, title, summary, collected_at)`
-- `analysis_results(id, cve_id, risk_level, recommendations, analysis_summary, generated_at, created_at)`
+- `analysis_results(id, cve_id, risk_level, risk_score, recommendations, analysis_summary, generated_at, created_at)`
 - Redis는 `mapping:*`, `epss:*`, `cvss:*`, `threat:*`, `analysis:*` 네임스페이스를 통해 캐시 TTL(`CACHE_TTL_SECONDS`)이 적용된 결과를 저장한다.
 
 ## AI Responsibilities
@@ -122,22 +126,18 @@
    - HTML/제어 문자 제거, URL 검증, 길이 제한
    - XSS 공격 벡터 차단
 
-### Latest Fixes (2025-11-17)
-6. **Perplexity API Error Handling** (`common_lib/ai_clients/perplexity.py`)
-   - Fixed "Illegal header value b'Bearer '" error when API key is empty
-   - Added early warning at initialization for missing API key
-   - Maintains fallback mechanism compatibility
+### Latest Fixes (2025-02-15)
+6. **Mapping Scheduler Stability** (`mapping_collector/app/scheduler.py`)
+   - AsyncSession을 `async for get_session()` 패턴으로 안전하게 획득
+   - 트랜잭션 실패 시 rollback + 에러 로깅 추가
 
-7. **JSON Serialization Fix** (`agent_orchestrator.py`)
-   - Fixed "Object of type 'HttpUrl' is not JSON serializable" error
-   - Created centralized `_serialize_threat_case()` helper function
-   - Eliminated duplicate serialization logic (3 locations → 1 helper)
-   - Improved type checking for Pydantic HttpUrl objects
+7. **Prioritization Accuracy** (`query_api/app/service.py`)
+   - 위험도 문자열을 대문자로 정규화하여 `CRITICAL/HIGH`도 올바른 가중치를 적용
+   - 대시보드의 P1/P2/P3 레이블이 분석 결과와 일치
 
-8. **Code Quality Improvements** (Codex review recommendations)
-   - Centralized ThreatCase serialization logic to prevent drift
-   - Enhanced type checking for HttpUrl conversion
-   - Improved error messages and early failure detection
+8. **Frontend Observability** (`web_frontend/src/api/client.ts`)
+   - `VITE_API_URL`/`VITE_QUERY_API_URL` 환경 변수 지원, Request ID 생성기 폴백 추가
+   - axios 1.13.x + React 18.3.x로 업그레이드
 
 ### Impact
 - **성능**: 캐시 히트율 향상, 불필요한 API 호출 감소

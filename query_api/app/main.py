@@ -1,6 +1,7 @@
 """QueryAPI FastAPI 애플리케이션(QueryAPI FastAPI application)."""
 from __future__ import annotations
 
+import logging
 import traceback
 import uuid
 from typing import Any
@@ -19,6 +20,7 @@ from .repository import QueryRepository
 from .service import QueryService
 
 logger = get_logger(__name__)
+debug_logger = logging.getLogger(__name__)
 app = FastAPI(title="QueryAPI")
 service = QueryService()
 
@@ -108,6 +110,10 @@ async def query(
 ) -> QueryResponse:
     """패키지 또는 CVE 기반 조회 실행(Execute query by package or CVE)."""
 
+    # --- DEBUG LOG ---
+    debug_logger.info(f"DEBUG [/query]: session type: {type(session)}, session repr: {repr(session)}")
+    # -----------------
+
     if session is None:
         raise ExternalServiceError(
             service_name="Database",
@@ -127,6 +133,10 @@ async def get_history(
     session=Depends(get_session),
 ) -> dict[str, object]:
     """분석 히스토리 조회(Fetch analysis history with pagination)."""
+
+    # --- DEBUG LOG ---
+    debug_logger.info(f"DEBUG: session type: {type(session)}, session repr: {repr(session)}")
+    # -----------------
 
     if session is None:
         raise ExternalServiceError(
@@ -148,6 +158,10 @@ async def get_history(
 @app.get("/api/v1/stats", tags=["stats"])
 async def get_stats(session=Depends(get_session)) -> dict[str, object]:
     """위험도 통계 조회(Get risk distribution statistics)."""
+
+    # --- DEBUG LOG ---
+    debug_logger.info(f"DEBUG [/stats]: session type: {type(session)}, session repr: {repr(session)}")
+    # -----------------
 
     if session is None:
         raise ExternalServiceError(

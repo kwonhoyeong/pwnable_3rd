@@ -19,7 +19,8 @@
 - Python 3.11+
 - PostgreSQL 14+
 - Redis 6+
-- Node.js 18+ (WebFrontend)
+- Node.js 18+ (Vite 기반 Web Frontend)
+- FastAPI 0.121.x, Uvicorn 0.3x, React 18.3.x (see `requirements.txt`, `web_frontend/package.json`)
 
 ## Setup
 1. `python3 -m venv .venv && source .venv/bin/activate`
@@ -100,12 +101,23 @@ chmod +x run_pipeline.sh
 > `.env` 파일이 준비되어 있어야 하며(PostgreSQL/Redis), 필요한 경우 `--python`으로 다른 인터프리터를 지정할 수 있습니다.
 
 ## Pipeline at a Glance
-1. `AgentOrchestrator` → 각 에이전트의 실행 순서를 정의하고 진행 상황을 브로드캐스트합니다.
+1. `AgentOrchestrator` → 각 에이전트 실행 순서를 정의하고 진행 상황을 브로드캐스트합니다.
 2. MappingAgent → 패키지/버전 입력에 대한 CVE를 캐시 조회 후 수집합니다.
 3. CVSSAgent & EPSSAgent → `asyncio.gather`로 동시에 실행되며 점수를 조회하고 캐싱합니다.
 4. ThreatAgent → 필요 시 위협 사례를 모으고, `--skip-threat-agent` 옵션 시 안전한 기본값으로 대체합니다.
-5. AnalyzerAgent → 위협·점수 데이터를 통합해 위험 등급/권고를 생성하고 캐시로 재사용합니다.
-6. QueryAPI/WebFrontend → Redis 캐시로 가속된 통합 결과를 사용자에게 노출합니다.
+5. Analyzer → Claude + GPT5를 사용하여 **엔터프라이즈 Markdown 리포트**를 생성하고, `CVSS*0.4 + (EPSS*10)*0.3 + AI Score*0.3` 가중치 기반 `risk_score`를 계산합니다.
+6. QueryAPI/WebFrontend → Redis 캐시+PostgreSQL을 조회해 `/api/v1/query`, `/api/v1/history`, `/api/v1/stats` 데이터를 노출하고 React 대시보드에서 시각화합니다.
+
+### QueryAPI Endpoints (v1)
+- `GET /api/v1/query?package=<name>|cve_id=<id>`: 패키지/CVE 단건 조회 (우선순위 스코어 포함)
+- `GET /api/v1/history?skip=0&limit=10`: AI 분석 이력 + `risk_score` 목록
+- `GET /api/v1/stats`: 위험도 분포(critical/high/medium/low/unknown) 및 전체 스캔 수
+- 모든 응답은 `X-Request-ID` 헤더·JSON 에러 포맷(`{"error": {...}}`)을 따릅니다.
+
+### Web Frontend (Vite/React 18.3)
+- Tailwind 기반 디자인 토큰(`web_frontend/src/styles/`)과 `components/ui`에서 버튼/배지/카드 등 원자 컴포넌트 정의
+- `DashboardPage`는 `SearchBar`, `StatsCards`, `RiskDistributionChart`, `RecentScansTable`을 조합해 API 데이터를 시각화
+- `web_frontend/src/api/client.ts`는 Request ID 헤더, `VITE_API_URL`/`VITE_QUERY_API_URL` 환경 변수를 지원합니다.
 
 ## System Status
 
@@ -113,9 +125,11 @@ chmod +x run_pipeline.sh
 - Multi-agent pipeline orchestration
 - CVE/CVSS/EPSS data collection with fallback mechanisms
 - Threat intelligence aggregation (when API keys configured)
-- AI-powered vulnerability analysis (when API keys configured)
+- AI-powered Markdown 분석 + 가중치 기반 위험 점수 산출
 - PostgreSQL persistence with automatic failover to in-memory mode
 - Redis caching with graceful degradation when unavailable
+- QueryAPI `/query` + `/history` + `/stats` endpoints with request ID middleware
+- React dashboard (Vite) + REST API client with automatic `X-Request-ID`
 - Robust error handling and logging
 
 ### Known Limitations
@@ -130,12 +144,12 @@ chmod +x run_pipeline.sh
   - Set `NT_ENABLE_DATABASE=true` when PostgreSQL is reachable.
   - Set `NT_ENABLE_CACHE=true` when Redis is available.
 
-### Recent Fixes (2025-11-17)
-- ✅ Fixed Perplexity API header error with empty API keys
-- ✅ Fixed JSON serialization error for Pydantic HttpUrl types
-- ✅ Centralized ThreatCase serialization to eliminate code duplication
-- ✅ Enhanced error messages and early failure detection
-- ✅ All code reviewed and improved via Codex
+### Recent Fixes (2025-02-15)
+- ✅ MappingScheduler uses AsyncSession safely (no more `async_generator` context errors)
+- ✅ Query prioritization respects uppercase `CRITICAL/HIGH` values for accurate dashboards
+- ✅ Frontend API client honors `VITE_API_URL`/`VITE_QUERY_API_URL` and backfills `X-Request-ID`
+- ✅ Dependencies bumped (FastAPI 0.121.x, Uvicorn 0.38.x, React 18.3.x, axios 1.13.x, etc.)
+- ✅ Docs refreshed: Weighted scoring, new endpoints, frontend stack summary
 
 ## Documentation
 - 더 자세한 내용은 `docs/ARCHITECTURE.md`, `docs/API.md` 참고

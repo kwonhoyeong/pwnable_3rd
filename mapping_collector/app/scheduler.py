@@ -40,25 +40,37 @@ class MappingScheduler:
     async def _run_once(self) -> None:
         """단일 실행(Tick execution)."""
 
-        async with get_session() as session:
+        async for session in get_session():
+            if session is None:
+                logger.warning("Database session unavailable; skipping scheduler tick.")
+                return
+
             repository = MappingRepository(session)
-            pending_jobs = await repository.list_pending_packages()
-            for job in pending_jobs:
-                package_name = str(job["package"])
-                version_range = str(job["version_range"])
-                ecosystem = str(job.get("ecosystem") or "npm")
-                cve_ids = await self._service.fetch_cves(package_name, version_range, ecosystem)
-                source = "aggregated"  # Default source for scheduler-collected mappings
-                mapping = PackageMapping(
-                    package=package_name,
-                    version_range=version_range,
-                    ecosystem=ecosystem,
-                    cve_ids=cve_ids,
-                    collected_at=datetime.utcnow(),
-                    source=source,
-                )
-                await repository.upsert_mapping(
-                    mapping.package, mapping.version_range, mapping.ecosystem, mapping.cve_ids
-                )
-                await repository.mark_processed(int(job["id"]))
-            await session.commit()
+            try:
+                pending_jobs = await repository.list_pending_packages()
+                for job in pending_jobs:
+                    package_name = str(job["package"])
+                    version_range = str(job["version_range"])
+                    ecosystem = str(job.get("ecosystem") or "npm")
+                    cve_ids = await self._service.fetch_cves(package_name, version_range, ecosystem)
+                    source = "aggregated"  # Default source for scheduler-collected mappings
+                    mapping = PackageMapping(
+                        package=package_name,
+                        version_range=version_range,
+                        ecosystem=ecosystem,
+                        cve_ids=cve_ids,
+                        collected_at=datetime.utcnow(),
+                        source=source,
+                    )
+                    await repository.upsert_mapping(
+                        mapping.package, mapping.version_range, mapping.ecosystem, mapping.cve_ids
+                    )
+                    await repository.mark_processed(int(job["id"]))
+                await session.commit()
+                logger.info("MappingScheduler tick processed %d jobs.", len(pending_jobs))
+            except Exception:
+                await session.rollback()
+                logger.exception("MappingScheduler tick failed; transaction rolled back.")
+                raise
+            finally:
+                break

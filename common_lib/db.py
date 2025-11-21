@@ -35,10 +35,12 @@ async def get_engine() -> AsyncEngine | None:
 
 
 async def get_session() -> AsyncIterator[AsyncSession | None]:
-    """세션 컨텍스트 관리자(Session context manager for FastAPI Depends).
+    """비동기 DB 세션을 제공하는 제너레이터(Async generator that provides an async DB session).
 
-    Returns an async generator that yields an AsyncSession or None.
-    FastAPI will automatically handle the context lifecycle.
+    Used with FastAPI's Depends() for dependency injection.
+    FastAPI automatically handles async generator cleanup.
+
+    Yields an AsyncSession or None.
     """
 
     global _session_factory

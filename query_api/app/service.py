@@ -73,17 +73,18 @@ class QueryService:
         """위협 우선순위를 계산하고 정렬(Calculate and sort threat priority)."""
 
         risk_weights = {
-            "Critical": 4,
-            "High": 3,
-            "Medium": 2,
-            "Low": 1,
-            "Unknown": 0,
+            "CRITICAL": 4,
+            "HIGH": 3,
+            "MEDIUM": 2,
+            "LOW": 1,
+            "UNKNOWN": 0,
         }
 
         prioritized: List[dict[str, object]] = []
         for item in results:
             risk_level = str(item.get("risk_level", "Unknown"))
-            risk_weight = risk_weights.get(risk_level, 0)
+            normalized_level = risk_level.upper()
+            risk_weight = risk_weights.get(normalized_level, risk_weights["UNKNOWN"])
             epss_value = item.get("epss_score")
             epss_score = float(epss_value) if epss_value is not None else None
             cvss_score = item.get("cvss_score")

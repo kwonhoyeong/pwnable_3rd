@@ -108,7 +108,8 @@
   ```json
   {
     "cve_id": "CVE-2023-1234",
-    "risk_level": "High",
+    "risk_level": "CRITICAL",
+    "risk_score": 8.7,
     "recommendations": ["..."],
     "analysis_summary": "...",
     "generated_at": "2025-10-24T12:42:00Z"
@@ -119,40 +120,78 @@
   - `500` 분석 실패(Analysis failure)
 
 ## QueryAPI
-- Endpoint: `GET /api/v1/query`
-- Query Parameters: `package` 또는 `cve_id` 필수
-- Response JSON:
-  ```json
-  {
-    "package": "lodash",
-    "cve_list": [
-      {
-        "cve_id": "CVE-2023-1234",
-        "epss_score": 0.87,
-        "cvss_score": 9.8,
-        "risk_level": "High",
-        "analysis_summary": "…",
-        "recommendations": ["…"],
-        "priority_score": 345.0,
-        "priority_label": "P1"
+- `GET /api/v1/query`: Package or CVE lookups (query params: `package` or `cve_id`)
+  - Response:
+    ```json
+    {
+      "package": "lodash",
+      "cve_list": [
+        {
+          "cve_id": "CVE-2023-1234",
+          "epss_score": 0.87,
+          "cvss_score": 9.8,
+          "risk_level": "CRITICAL",
+          "analysis_summary": "…",
+          "recommendations": ["…"],
+          "priority_score": 345.0,
+          "priority_label": "P1"
+        }
+      ]
+    }
+    ```
+- `GET /api/v1/history`: Paginated analysis history
+  - Query params: `skip` (default 0), `limit` (default 10, max 100)
+  - Response:
+    ```json
+    {
+      "skip": 0,
+      "limit": 10,
+      "total_returned": 2,
+      "records": [
+        {
+          "cve_id": "CVE-2023-1234",
+          "risk_level": "CRITICAL",
+          "risk_score": 8.7,
+          "analysis_summary": "…",
+          "recommendations": ["…"],
+          "generated_at": "2025-10-24T12:42:00Z",
+          "created_at": "2025-10-24T12:42:00Z"
+        }
+      ]
+    }
+    ```
+- `GET /api/v1/stats`: Aggregated risk distribution
+  - Response:
+    ```json
+    {
+      "total_scans": 250,
+      "risk_distribution": {
+        "CRITICAL": 15,
+        "HIGH": 45,
+        "MEDIUM": 120,
+        "LOW": 60,
+        "Unknown": 10
       }
-    ]
-  }
-  ```
+    }
+    ```
 - Errors:
   - `400` 파라미터 누락(Missing parameters)
   - `404` 데이터 없음(Not found)
+  - `503` 외부 서비스 오류(Database/cache unavailable)
   - `500` 서버 오류(Server error)
 
 ## Authentication
 - 현재 버전은 API 키 인증 없음(No authentication yet). 향후 서비스 토큰 추가 예정.
 
 ## Error Envelope
-- 실패 시 응답 형식:
+- 실패 시 표준 응답 형식:
   ```json
   {
-    "error_code": "SERVICE_UNAVAILABLE",
-    "message": "상세 오류 메시지",
-    "timestamp": "2025-10-24T12:34:56Z"
+    "error": {
+      "code": "SERVICE_UNAVAILABLE",
+      "message": "상세 오류 메시지",
+      "details": {},
+      "request_id": "f3f8c83e-..."
+    }
   }
   ```
