@@ -5,12 +5,13 @@ import { Badge } from '../ui/Badge';
 import { ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 
+// ScanRecord interface is now imported from endpoints.ts
 export interface ScanRecord {
   cve_id: string;
   risk_level: string;
-  risk_score?: number;
+  priority_score: number | null;
   analysis_summary: string;
-  created_at?: string;
+  created_at: string | null;
 }
 
 interface RecentScansTableProps {
@@ -37,7 +38,7 @@ export const RecentScansTable: React.FC<RecentScansTableProps> = ({
     }
   };
 
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -97,7 +98,7 @@ export const RecentScansTable: React.FC<RecentScansTableProps> = ({
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
-                    {scan.risk_score ? scan.risk_score.toFixed(1) : 'N/A'}
+                    {typeof scan.priority_score === 'number' ? scan.priority_score.toFixed(1) : 'N/A'}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate">
                     {scan.analysis_summary}

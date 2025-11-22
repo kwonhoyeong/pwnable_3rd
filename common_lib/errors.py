@@ -114,3 +114,28 @@ class InvalidInputError(AppException):
             message=message,
             details=details or {"field": field, "reason": reason},
         )
+
+
+class AnalysisInProgressError(AppException):
+    """분석이 진행 중임(Analysis in progress - 202)."""
+
+    def __init__(
+        self,
+        resource_type: str,
+        identifier: str,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Initialize with analysis context.
+
+        Args:
+            resource_type: Type of resource being analyzed (e.g., "package", "cve")
+            identifier: Resource identifier (e.g., package name, CVE ID)
+            details: Additional context
+        """
+        message = f"Analysis for {resource_type} '{identifier}' has been initiated. Please try again in a few moments."
+        super().__init__(
+            status_code=202,  # Accepted - request accepted for processing but not completed
+            error_code="ANALYSIS_IN_PROGRESS",
+            message=message,
+            details=details or {"resource_type": resource_type, "identifier": identifier, "status": "queued"},
+        )

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Clock } from 'lucide-react';
 import { SearchBar } from '../components/dashboard/SearchBar';
 import { StatsCards } from '../components/dashboard/StatsCards';
 import { RiskDistributionChart } from '../components/dashboard/RiskDistributionChart';
@@ -12,6 +12,9 @@ import {
   HistoryResponse,
   QueryResponse,
   convertCVEDetailsToScanRecords,
+  convertHistoryToScanRecords,
+  getErrorCode,
+  getErrorMessage,
 } from '../api/endpoints';
 
 /**
@@ -106,7 +109,7 @@ export const DashboardPage: React.FC = () => {
   // Determine which scans to display: search results or history
   const displayedScans: ScanRecord[] = searchQuery.data
     ? convertCVEDetailsToScanRecords(searchQuery.data.cve_list)
-    : convertCVEDetailsToScanRecords(historyQuery.data?.records ?? []);
+    : convertHistoryToScanRecords(historyQuery.data?.records ?? []);
 
   // ============================================================================
   // RENDER
@@ -147,15 +150,48 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {searchQuery.isError && searchParams && (
-        <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-          <div>
-            <p className="font-medium text-red-800 dark:text-red-200">
-              Failed to search for {searchParams.package}
-            </p>
-            <p className="text-sm text-red-700 dark:text-red-300">Please check the package name and try again</p>
-          </div>
-        </div>
+        (() => {
+          const errorCode = getErrorCode(searchQuery.error);
+          const isAnalysisInProgress = errorCode === 'ANALYSIS_IN_PROGRESS';
+
+          return (
+            <div
+              className={`flex items-center gap-3 p-4 rounded-lg border ${
+                isAnalysisInProgress
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+              }`}
+            >
+              {isAnalysisInProgress ? (
+                <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 animate-spin" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              )}
+
+              <div>
+                {isAnalysisInProgress ? (
+                  <>
+                    <p className="font-medium text-blue-800 dark:text-blue-200">
+                      AI Analysis In Progress
+                    </p>
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      {getErrorMessage(searchQuery.error)}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-red-800 dark:text-red-200">
+                      Failed to search for {searchParams.package}
+                    </p>
+                    <p className="text-sm text-red-700 dark:text-red-300">
+                      {getErrorMessage(searchQuery.error) || 'Please check the package name and try again'}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()
       )}
 
       {/* Stats Cards Section */}
@@ -168,23 +204,28 @@ export const DashboardPage: React.FC = () => {
         isLoading={statsQuery.isLoading}
       />
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Risk Distribution Chart (1/3 width) */}
-        <div className="lg:col-span-1">
-          <RiskDistributionChart data={riskDistribution} isLoading={statsQuery.isLoading} />
-        </div>
+      {/* Main Content Grid - Hidden when analysis is in progress */}
+      {!(() => {
+        const errorCode = getErrorCode(searchQuery.error);
+        return errorCode === 'ANALYSIS_IN_PROGRESS' && searchParams;
+      })() && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Risk Distribution Chart (1/3 width) */}
+          <div className="lg:col-span-1">
+            <RiskDistributionChart data={riskDistribution} isLoading={statsQuery.isLoading} />
+          </div>
 
-        {/* Right Column: Recent Scans Table (2/3 width) */}
-        <div className="lg:col-span-2">
-          <RecentScansTable
-            data={displayedScans}
-            isLoading={
-              searchQuery.isFetching || (historyQuery.isLoading && !searchParams)
-            }
-          />
+          {/* Right Column: Recent Scans Table (2/3 width) */}
+          <div className="lg:col-span-2">
+            <RecentScansTable
+              data={displayedScans}
+              isLoading={
+                searchQuery.isFetching || (historyQuery.isLoading && !searchParams)
+              }
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Search Results Information */}
       {searchParams && searchQuery.data && (

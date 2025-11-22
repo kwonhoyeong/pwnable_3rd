@@ -54,8 +54,8 @@ class QueryRepository:
             return [
                 {
                     "cve_id": row.cve_id,
-                    "epss_score": row.epss_score,
-                    "cvss_score": row.cvss_score,
+                    "epss_score": float(row.epss_score) if row.epss_score is not None else None,
+                    "cvss_score": float(row.cvss_score) if row.cvss_score is not None else None,
                     "risk_level": row.risk_level or "Unknown",
                     "analysis_summary": row.analysis_summary or "",
                     "recommendations": row.recommendations or [],
@@ -103,8 +103,8 @@ class QueryRepository:
             return [
                 {
                     "cve_id": row.cve_id,
-                    "epss_score": row.epss_score,
-                    "cvss_score": row.cvss_score,
+                    "epss_score": float(row.epss_score) if row.epss_score is not None else None,
+                    "cvss_score": float(row.cvss_score) if row.cvss_score is not None else None,
                     "risk_level": row.risk_level or "Unknown",
                     "analysis_summary": row.analysis_summary or "",
                     "recommendations": row.recommendations or [],
