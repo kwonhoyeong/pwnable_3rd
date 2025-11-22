@@ -152,7 +152,7 @@ chmod +x run_pipeline.sh
 - ✅ Docs refreshed: Weighted scoring, new endpoints, frontend stack summary
 
 ## Documentation
-- 더 자세한 내용은 `docs/ARCHITECTURE.md`, `docs/API.md` 참고
+- 더 자세한 내용은 `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/REVIEW.md` 참고
 - Recent improvements: See `docs/ARCHITECTURE.md` → "Latest Fixes (2025-11-17)"
 
 ## License
