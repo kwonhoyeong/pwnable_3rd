@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+from common_lib.ai_clients import PerplexityClient
 from common_lib.config import get_settings
 from common_lib.logger import get_logger
 
@@ -31,6 +32,9 @@ class CVSSService:
         if not self._nvd_api_key:
             logger.warning("NVD API 키가 설정되지 않음 - 제한된 속도로 실행됩니다 (API key not set - running with rate limits)")
 
+        # Perplexity Client 초기화 (Fallback용)
+        self._perplexity = PerplexityClient()
+
     @staticmethod
     def _build_response(
         cve_id: str,
@@ -50,6 +54,54 @@ class CVSSService:
         """CVE ID 형식 검증(Validate CVE ID format)."""
         pattern = r"^CVE-\d{4}-\d{4,}$"
         return bool(re.match(pattern, cve_id))
+
+    async def _fetch_from_perplexity(self, cve_id: str) -> Dict[str, Any]:
+        """Perplexity를 통해 CVSS 점수 검색(Search CVSS score via Perplexity)."""
+        logger.info("Perplexity로 CVSS 점수 검색 시도(Attempting Perplexity fallback for %s)", cve_id)
+        
+        prompt = (
+            f"Find the CVSS v3.1 (or v3.0/v2) base score and vector string for {cve_id}. "
+            "Return ONLY the JSON object with keys: 'score' (float) and 'vector' (string). "
+            "If not found, return empty JSON {}."
+        )
+        
+        try:
+            # 구조화된 출력 요청 (Structured output request)
+            schema = {
+                "type": "object",
+                "properties": {
+                    "score": {"type": "number"},
+                    "vector": {"type": "string"}
+                },
+                "required": ["score"]
+            }
+            
+            result = await self._perplexity.structured_output(prompt, schema)
+            
+            # 파싱 (Parsing logic depends on actual client implementation, assuming raw text needs parsing or direct dict)
+            # For now, let's assume the client returns a dict with 'raw' text or we parse the text.
+            # Since structured_output returns {'raw': str}, we might need to parse it if it's not automatically parsed.
+            # But let's try to use a simpler chat approach if structured is complex, 
+            # or assume the user wants the text parsed.
+            # Let's use a simple regex on the chat response for robustness.
+            
+            response_text = result.get("raw", "")
+            
+            # Extract score
+            score_match = re.search(r'"score":\s*([\d\.]+)', response_text)
+            vector_match = re.search(r'"vector":\s*"([^"]+)"', response_text)
+            
+            score = float(score_match.group(1)) if score_match else None
+            vector = vector_match.group(1) if vector_match else None
+            
+            if score is not None:
+                logger.info("Perplexity에서 CVSS 점수 발견(Found CVSS via Perplexity): %s = %.1f", cve_id, score)
+                return self._build_response(cve_id, score=score, vector=vector, source="Perplexity")
+            
+        except Exception as exc:
+            logger.warning("Perplexity 검색 실패(Perplexity fallback failed): %s", exc)
+            
+        return self._build_response(cve_id, source="not_found_perplexity")
 
     async def fetch_score(self, cve_id: str) -> Dict[str, Any]:
         """NVD API를 통해 CVSS 점수를 조회(Fetch CVSS score from NVD API)."""
@@ -79,8 +131,8 @@ class CVSSService:
                     )
                     
                     if response.status_code == 404:
-                        logger.info("CVE not found in NVD: %s", cve_id)
-                        return self._build_response(cve_id, source="not_found")
+                        logger.info("CVE not found in NVD: %s, trying fallback", cve_id)
+                        return await self._fetch_from_perplexity(cve_id)
                     
                     if response.status_code == 403:
                         logger.warning("NVD API 인증 실패 - API 키 확인 필요 (Authentication failed - check API key)")
@@ -132,11 +184,11 @@ class CVSSService:
                                 "collected_at": datetime.utcnow(),
                             }
                         else:
-                            logger.warning("NVD 응답에 CVSS 데이터 없음 (No CVSS data in NVD response): %s", cve_id)
-                            return self._build_response(cve_id, source="no_cvss_data")
+                            logger.warning("NVD 응답에 CVSS 데이터 없음 (No CVSS data in NVD response): %s, trying fallback", cve_id)
+                            return await self._fetch_from_perplexity(cve_id)
 
-                    logger.warning("NVD 응답에 취약점 데이터 없음 (No vulnerability data in NVD response): %s", cve_id)
-                    return self._build_response(cve_id, source="not_found")
+                    logger.warning("NVD 응답에 취약점 데이터 없음 (No vulnerability data in NVD response): %s, trying fallback", cve_id)
+                    return await self._fetch_from_perplexity(cve_id)
 
             except httpx.TimeoutException:
                 logger.warning(

@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 class GPT5Client(IAIClient):
     """GPT-5 API 래퍼(Wrapper for GPT-5 API)."""
 
-    def __init__(self, base_url: str = "https://api.openai.com/v1", timeout: float = 10.0) -> None:
+    def __init__(self, base_url: str = "https://api.openai.com/v1", timeout: float = 60.0) -> None:
         settings = get_settings()
         self._base_url = base_url
         self._api_key = settings.gpt5_api_key

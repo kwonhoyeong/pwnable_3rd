@@ -65,30 +65,3 @@ CREATE TABLE IF NOT EXISTS analysis_results (
     generated_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
--- 샘플 데이터 삽입(Seed sample data)
-INSERT OR IGNORE INTO package_cve_mapping (package, version_range, ecosystem, cve_ids)
-VALUES ('lodash', '<4.17.21', 'npm', '["CVE-2023-1234", "CVE-2022-5678"]');
-
-INSERT OR IGNORE INTO package_scan_queue (package, version_range, ecosystem, processed)
-VALUES ('lodash', '<4.17.21', 'npm', 1);
-
-INSERT OR IGNORE INTO epss_scores (cve_id, epss_score, collected_at)
-VALUES ('CVE-2023-1234', 0.8700, datetime('now'));
-
-INSERT OR IGNORE INTO threat_cases (cve_id, package, version_range, cases)
-VALUES (
-    'CVE-2023-1234',
-    'lodash',
-    '<4.17.21',
-    '[{"source": "https://example.com/exploit-detail", "title": "Exploitation of CVE-2023-1234 in lodash", "date": "2025-10-10", "summary": "Attackers chained vulnerabilities to achieve remote code execution."}]'
-);
-
-INSERT OR IGNORE INTO analysis_results (cve_id, risk_level, recommendations, analysis_summary, generated_at)
-VALUES (
-    'CVE-2023-1234',
-    'High',
-    '["Upgrade lodash to 4.17.21 or later", "Review transitive dependencies for vulnerable versions"]',
-    'Lodash versions below 4.17.21 exhibit a high-risk vulnerability with observed exploitation cases.',
-    datetime('now')
-);
