@@ -215,13 +215,6 @@ npm run dev -- --host 0.0.0.0
 - `docs/JSONB_FIX_EXPLANATION.md`: ThreatAgent JSONB 직렬화 이슈 분석
 - `manual_checklist.md`: 수동 점검 체크리스트
 
-## 최근 갱신 사항 (2025-02-15)
-- MappingScheduler가 `AsyncSession`을 안전하게 사용하여 `async_generator` 경고 제거
-- QueryAPI 위험도 우선순위가 `risk_score` 기반으로 통일되고 대문자 `CRITICAL/HIGH` 처리 강화
-- React 대시보드가 `VITE_API_URL`/`VITE_QUERY_API_URL`을 존중하며 Request ID를 자동 주입
-- ThreatAgent JSONB 저장 로직이 `bindparam(..., type_=JSONB)`로 수정되어 `list has no attribute encode` 오류 해결
-- worker/QueryAPI 간 분석 작업 큐(`analysis_tasks`) 연동 및 `ANALYSIS_IN_PROGRESS` 응답이 정교화
-
 ## 데이터베이스 접속 방법 (Database Access)
 Docker 컨테이너로 실행 중인 PostgreSQL 데이터베이스에 접속하는 방법입니다.
 
