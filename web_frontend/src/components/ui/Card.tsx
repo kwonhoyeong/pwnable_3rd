@@ -9,13 +9,17 @@ interface CardProps {
 
 export const Card: React.FC<CardProps> = ({ children, className, title }) => {
   return (
-    <div className={clsx('bg-white rounded-xl shadow-sm border border-slate-200/75', className)}>
+    <div
+      className={clsx('card p-6', className)}
+    >
       {title && (
-        <div className="px-6 pt-6 pb-0">
-          <h3 className="text-lg font-semibold text-slate-800 mb-6">{title}</h3>
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-white">
+            {title}
+          </h3>
         </div>
       )}
-      <div className={title ? 'px-6 pb-6' : 'p-6'}>
+      <div>
         {children}
       </div>
     </div>

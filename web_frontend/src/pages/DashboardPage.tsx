@@ -3,14 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, Clock } from 'lucide-react';
 import { SearchBar } from '../components/dashboard/SearchBar';
 import { StatsCards } from '../components/dashboard/StatsCards';
-import { RiskDistributionChart } from '../components/dashboard/RiskDistributionChart';
-import { RecentScansTable, ScanRecord } from '../components/dashboard/RecentScansTable';
+
+import { RecentScansTable } from '../components/dashboard/RecentScansTable';
 import { Card } from '../components/ui/Card';
 import {
   queryAPI,
   StatsResponse,
   HistoryResponse,
   QueryResponse,
+  ScanRecord,
   convertCVEDetailsToScanRecords,
   convertHistoryToScanRecords,
   getErrorCode,
@@ -60,7 +61,11 @@ export const DashboardPage: React.FC = () => {
       if (!searchParams) {
         return Promise.reject(new Error('No search params'));
       }
-      return queryAPI.query({ package: searchParams.package }).then((res) => res.data);
+      // Pass both package and version to the backend
+      return queryAPI.query({
+        package: searchParams.package,
+        version: searchParams.version || 'latest', // Default to 'latest' if not specified
+      }).then((res) => res.data);
     },
     enabled: !!searchParams, // Only run when searchParams is not null
     staleTime: 1000 * 60 * 10, // 10 minutes
@@ -91,10 +96,10 @@ export const DashboardPage: React.FC = () => {
   // Extract stats data with fallbacks
   const stats = {
     totalScans: statsQuery.data?.total_scans ?? 0,
-    critical: statsQuery.data?.risk_distribution.CRITICAL ?? 0,
-    high: statsQuery.data?.risk_distribution.HIGH ?? 0,
-    medium: statsQuery.data?.risk_distribution.MEDIUM ?? 0,
-    low: statsQuery.data?.risk_distribution.LOW ?? 0,
+    critical: statsQuery.data?.risk_distribution?.CRITICAL ?? 0,
+    high: statsQuery.data?.risk_distribution?.HIGH ?? 0,
+    medium: statsQuery.data?.risk_distribution?.MEDIUM ?? 0,
+    low: statsQuery.data?.risk_distribution?.LOW ?? 0,
   };
 
   // Risk distribution for chart
@@ -107,7 +112,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   // Determine which scans to display: search results or history
-  const displayedScans: ScanRecord[] = searchQuery.data
+  const displayedScans: ScanRecord[] = searchQuery.data?.cve_list
     ? convertCVEDetailsToScanRecords(searchQuery.data.cve_list)
     : convertHistoryToScanRecords(historyQuery.data?.records ?? []);
 
@@ -118,23 +123,25 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-8">
       {/* Header Section */}
-      <div>
-        <h1 className="text-4xl font-bold text-slate-900 dark:text-white">Security Overview</h1>
-        <p className="text-slate-600 dark:text-slate-400 mt-2">
-          Real-time analysis of your NPM supply chain
-        </p>
-      </div>
+
 
       {/* Search Section */}
       <SearchBar onSearch={handleSearch} isLoading={searchQuery.isFetching} />
 
       {/* Error Messages */}
       {statsQuery.isError && (
-        <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+        <div
+          className="flex items-center gap-3 p-4 rounded-lg border"
+          style={{
+            backgroundColor: 'rgba(220, 38, 38, 0.05)',
+            borderColor: 'rgba(220, 38, 38, 0.2)',
+            color: 'var(--color-critical)',
+          }}
+        >
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <div>
-            <p className="font-medium text-red-800 dark:text-red-200">Failed to load statistics</p>
-            <p className="text-sm text-red-700 dark:text-red-300">Please try again later</p>
+            <p className="font-medium">Failed to load statistics</p>
+            <p className="text-sm opacity-80">Please try again later</p>
           </div>
         </div>
       )}
@@ -156,11 +163,10 @@ export const DashboardPage: React.FC = () => {
 
           return (
             <div
-              className={`flex items-center gap-3 p-4 rounded-lg border ${
-                isAnalysisInProgress
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-              }`}
+              className={`flex items-center gap-3 p-4 rounded-lg border ${isAnalysisInProgress
+                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                }`}
             >
               {isAnalysisInProgress ? (
                 <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 animate-spin" />
@@ -172,10 +178,10 @@ export const DashboardPage: React.FC = () => {
                 {isAnalysisInProgress ? (
                   <>
                     <p className="font-medium text-blue-800 dark:text-blue-200">
-                      AI Analysis In Progress
+                      보고서 생성 중... (Generating Report...)
                     </p>
                     <p className="text-sm text-blue-700 dark:text-blue-300">
-                      {getErrorMessage(searchQuery.error)}
+                      잠시만 기다려주세요. AI가 취약점을 분석하고 있습니다. (Please wait a moment. AI is analyzing vulnerabilities.)
                     </p>
                   </>
                 ) : (
@@ -209,14 +215,7 @@ export const DashboardPage: React.FC = () => {
         const errorCode = getErrorCode(searchQuery.error);
         return errorCode === 'ANALYSIS_IN_PROGRESS' && searchParams;
       })() && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Risk Distribution Chart (1/3 width) */}
-          <div className="lg:col-span-1">
-            <RiskDistributionChart data={riskDistribution} isLoading={statsQuery.isLoading} />
-          </div>
-
-          {/* Right Column: Recent Scans Table (2/3 width) */}
-          <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 gap-6">
             <RecentScansTable
               data={displayedScans}
               isLoading={
@@ -224,8 +223,7 @@ export const DashboardPage: React.FC = () => {
               }
             />
           </div>
-        </div>
-      )}
+        )}
 
       {/* Search Results Information */}
       {searchParams && searchQuery.data && (
@@ -233,7 +231,7 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-blue-900 dark:text-blue-100">
-                Found {searchQuery.data.cve_list.length} vulnerabilities for{' '}
+                Found {searchQuery.data.cve_list?.length ?? 0} vulnerabilities for{' '}
                 <span className="font-semibold">{searchParams.package}</span>
               </p>
               <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
@@ -251,7 +249,7 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {/* No Results Message */}
-      {searchParams && searchQuery.data && searchQuery.data.cve_list.length === 0 && (
+      {searchParams && searchQuery.data && searchQuery.data.cve_list?.length === 0 && (
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <p className="text-green-800 dark:text-green-200">
             ✓ No vulnerabilities found for <span className="font-semibold">{searchParams.package}</span>

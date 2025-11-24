@@ -26,13 +26,25 @@ class QueryService:
     def __init__(self, cache_ttl: int = 300) -> None:
         self._cache_ttl = cache_ttl
 
-    async def query(self, repository: QueryRepository, package: Optional[str], cve_id: Optional[str]) -> QueryResponse:
+    async def query(
+        self,
+        repository: QueryRepository,
+        package: Optional[str],
+        cve_id: Optional[str],
+        version: Optional[str] = None,
+    ) -> QueryResponse:
         """패키지 또는 CVE 기준으로 조회(Query by package or CVE).
+
+        Args:
+            repository: Query repository for database access
+            package: Package name to search for
+            cve_id: CVE ID to search for
+            version: Optional package version. If not provided, defaults to 'latest' for analysis jobs.
 
         If data is not found, triggers analysis and polls for results.
         """
 
-        cache_key = self._build_cache_key(package, cve_id)
+        cache_key = self._build_cache_key(package, cve_id, version)
         redis = None
         try:
             redis = await get_redis()
@@ -46,7 +58,7 @@ class QueryService:
 
         try:
             if package:
-                raw_results = await repository.find_by_package(package)
+                raw_results = await repository.find_by_package(package, version)
                 results = self._prioritize(raw_results)
                 response = QueryResponse(
                     package=package,
@@ -70,12 +82,16 @@ class QueryService:
             )
 
             # Submit analysis job to Redis
-            success = await submit_analysis_job(
-                package_name=package or cve_id or "unknown",
-                version=None,  # Use default "latest"
-                force=False,
-                source="web_query",
-            )
+            if package:
+                success = await submit_analysis_job(
+                    package_name=package,
+                    version=version or "latest",  # Use provided version or default to "latest"
+                    force=False,
+                    source="web_query",
+                )
+            else:
+                logger.info("Skipping analysis job creation for CVE-only search: %s", cve_id)
+                success = True # Treat as success to proceed to polling (though polling might fail if data missing)
 
             if not success:
                 logger.warning(
@@ -90,7 +106,7 @@ class QueryService:
                 package or cve_id,
             )
             results = await self._poll_for_analysis_results(
-                repository, package, cve_id
+                repository, package, cve_id, version
             )
 
             if results is not None:
@@ -126,10 +142,18 @@ class QueryService:
         return response
 
     @staticmethod
-    def _build_cache_key(package: Optional[str], cve_id: Optional[str]) -> str:
-        """캐시 키 생성(Create cache key)."""
+    def _build_cache_key(package: Optional[str], cve_id: Optional[str], version: Optional[str] = None) -> str:
+        """캐시 키 생성(Create cache key).
+
+        Args:
+            package: Package name
+            cve_id: CVE ID
+            version: Optional version (included in cache key if provided)
+        """
 
         if package:
+            if version:
+                return f"query:package:{package}:v{version}"
             return f"query:package:{package}"
         if cve_id:
             return f"query:cve:{cve_id}"
@@ -138,61 +162,42 @@ class QueryService:
     @staticmethod
     def _prioritize(results: List[dict[str, object]]) -> List[dict[str, object]]:
         """위협 우선순위를 계산하고 정렬(Calculate and sort threat priority)."""
-
-        risk_weights = {
-            "CRITICAL": 4,
-            "HIGH": 3,
-            "MEDIUM": 2,
-            "LOW": 1,
-            "UNKNOWN": 0,
-        }
-
         prioritized: List[dict[str, object]] = []
         for item in results:
-            risk_level = str(item.get("risk_level", "Unknown"))
-            normalized_level = risk_level.upper()
-            risk_weight = risk_weights.get(normalized_level, risk_weights["UNKNOWN"])
-            epss_value = item.get("epss_score")
-            epss_score = float(epss_value) if epss_value is not None else None
             cvss_score = item.get("cvss_score")
-            cvss_value = float(cvss_score) if cvss_score is not None else None
 
-            priority_score = risk_weight * 100
-            if cvss_value is not None:
-                priority_score += cvss_value * 5
-            if epss_score is not None:
-                priority_score += epss_score * 10
+            # Use risk_score from DB, default to 0.0 if missing
+            risk_score = float(item.get("risk_score") or 0.0)
 
-            if risk_weight >= 3 or (cvss_value is not None and cvss_value >= 8.0) or (
-                epss_score is not None and epss_score >= 0.7
-            ):
-                priority_label = "P1"
-            elif risk_weight >= 2 or (cvss_value is not None and cvss_value >= 6.0) or (
-                epss_score is not None and epss_score >= 0.4
-            ):
-                priority_label = "P2"
-            elif epss_score is None and cvss_value is None:
-                priority_label = "P2" if risk_weight else "P3"
+            # Derive risk_label based on risk_score (simple mapping)
+            # P1: Score >= 8.0 (Critical/High equivalent)
+            # P2: Score >= 5.0 (Medium equivalent)
+            # P3: Score < 5.0 (Low equivalent)
+            if risk_score >= 8.0:
+                risk_label = "P1"
+            elif risk_score >= 5.0:
+                risk_label = "P2"
             else:
-                priority_label = "P3"
+                risk_label = "P3"
 
             prioritized.append(
                 {
                     **item,
                     "cvss_score": cvss_score,
-                    "priority_score": priority_score,
-                    "priority_label": priority_label,
+                    "risk_score": risk_score,
+                    "risk_label": risk_label,
                 }
             )
 
-        prioritized.sort(key=lambda entry: entry["priority_score"], reverse=True)
-        return prioritized
+        prioritized.sort(key=lambda entry: entry["risk_score"], reverse=True)
+        return prioritized[:10]
 
     async def _poll_for_analysis_results(
         self,
         repository: QueryRepository,
         package: Optional[str],
         cve_id: Optional[str],
+        version: Optional[str] = None,
     ) -> Optional[QueryResponse]:
         """분석 결과를 폴링으로 기다림(Poll database for analysis results).
 
@@ -200,6 +205,7 @@ class QueryService:
             repository: Query repository for database access
             package: Package name (if searching by package)
             cve_id: CVE ID (if searching by CVE)
+            version: Optional package version
 
         Returns:
             QueryResponse if results found within timeout, None otherwise
@@ -214,7 +220,7 @@ class QueryService:
 
                 # Attempt to fetch results
                 if package:
-                    raw_results = await repository.find_by_package(package)
+                    raw_results = await repository.find_by_package(package, version)
                     results = self._prioritize(raw_results)
                     response = QueryResponse(
                         package=package,

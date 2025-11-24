@@ -1,6 +1,5 @@
 import React from 'react';
-import { Card } from '../ui/Card';
-import { AlertTriangle, TrendingUp } from 'lucide-react';
+import { Shield, AlertTriangle, AlertCircle, Info, TrendingUp, ArrowUp, ArrowDown } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface StatsCardsProps {
@@ -22,11 +21,12 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
 }) => {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {[...Array(5)].map((_, i) => (
-          <Card key={i} className="animate-pulse">
-            <div className="h-24 bg-slate-200 dark:bg-slate-700 rounded"></div>
-          </Card>
+          <div
+            key={i}
+            className="h-48 rounded-[24px] animate-pulse bg-surface border border-white/5"
+          />
         ))}
       </div>
     );
@@ -37,50 +37,85 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
       label: 'Total Scans',
       value: totalScans,
       icon: TrendingUp,
-      color: 'text-blue-600 dark:text-blue-400',
-      bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+      color: 'text-primary',
+      bg: 'bg-primary/20',
+      trend: '+4.5%',
+      trendUp: true,
     },
     {
       label: 'Critical',
       value: critical,
-      icon: AlertTriangle,
-      color: 'text-critical-600 dark:text-critical-400',
-      bgColor: 'bg-critical-50 dark:bg-critical-900/20',
+      icon: Shield,
+      color: 'text-accent-orange',
+      bg: 'bg-accent-orange/20',
+      trend: '-2.3%',
+      trendUp: false,
     },
     {
       label: 'High',
       value: high,
-      color: 'text-high-600 dark:text-high-400',
-      bgColor: 'bg-high-50 dark:bg-high-900/20',
+      icon: AlertTriangle,
+      color: 'text-accent-yellow',
+      bg: 'bg-accent-yellow/20',
+      trend: '+1.8%',
+      trendUp: true,
     },
     {
       label: 'Medium',
       value: medium,
-      color: 'text-medium-600 dark:text-medium-400',
-      bgColor: 'bg-medium-50 dark:bg-medium-900/20',
+      icon: AlertCircle,
+      color: 'text-accent-blue',
+      bg: 'bg-accent-blue/20',
+      trend: '-0.5%',
+      trendUp: false,
     },
     {
       label: 'Low',
       value: low,
-      color: 'text-low-600 dark:text-low-400',
-      bgColor: 'bg-low-50 dark:bg-low-900/20',
+      icon: Info,
+      color: 'text-accent-green',
+      bg: 'bg-accent-green/20',
+      trend: '+3.2%',
+      trendUp: true,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
       {stats.map((stat) => {
         const Icon = stat.icon;
+        const TrendIcon = stat.trendUp ? ArrowUp : ArrowDown;
+
         return (
-          <Card key={stat.label} className={clsx('p-4', stat.bgColor)}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{stat.label}</p>
-                <p className="text-3xl font-bold mt-2 text-slate-900 dark:text-white">{stat.value}</p>
+          <div
+            key={stat.label}
+            className="group relative p-6 rounded-[24px] bg-surface border border-white/5 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden"
+          >
+            {/* Background Glow Effect */}
+            <div className={clsx(
+              "absolute -right-6 -top-6 w-24 h-24 rounded-full blur-3xl opacity-0 group-hover:opacity-20 transition-opacity duration-500",
+              stat.bg.replace('/20', '')
+            )} />
+
+            <div className="flex justify-between items-start mb-6 relative z-10">
+              <span className="text-sm font-semibold text-secondary">
+                {stat.label}
+              </span>
+              <div className={clsx(
+                'w-12 h-12 rounded-full flex items-center justify-center transition-transform duration-300 group-hover:scale-110',
+                stat.bg,
+                stat.color
+              )}>
+                <Icon className="w-6 h-6" />
               </div>
-              {Icon && <Icon className={clsx('w-8 h-8 opacity-20', stat.color)} />}
             </div>
-          </Card>
+
+            <div className="flex flex-col gap-3 relative z-10">
+              <h3 className="text-4xl font-bold text-white tracking-tight">
+                {stat.value.toLocaleString()}
+              </h3>
+            </div>
+          </div>
         );
       })}
     </div>

@@ -5,7 +5,7 @@ import os
 from functools import lru_cache
 from typing import Any, Dict
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,7 @@ class Settings(BaseSettings):
         env_prefix="NT_",
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     app_name: str = Field(default="npm-threat-evaluator", description="서비스 이름(Service name)")
@@ -51,8 +52,40 @@ class Settings(BaseSettings):
     perplexity_api_key: str = Field(default="", description="Perplexity API 키(Perplexity API key)")
     claude_api_key: str = Field(default="", description="Claude API 키(Claude API key)")
     gpt5_api_key: str = Field(default="", description="GPT-5 API 키(GPT-5 API key)")
+    nvd_api_key: str = Field(default="", description="NVD API 키(NVD API key)")
+
+    query_api_keys: str | list[str] = Field(
+        default_factory=list,
+        env="QUERY_API_KEYS",
+        description="QueryAPI 인증 키 쉼표 구분 목록(Comma-separated list of valid API keys for QueryAPI)",
+    )
 
     log_level: str = Field(default="INFO", description="로그 레벨(Log level)")
+
+    @field_validator("query_api_keys", mode="before")
+    @classmethod
+    def parse_query_api_keys(cls, v: Any) -> list[str]:
+        """Parse comma-separated API keys string into list."""
+        # logger is not available here easily as it might cause circular import or not initialized
+        # print(f"DEBUG: parse_query_api_keys called with type={type(v)} value={v}")
+        
+        if v is None:
+            return []
+        if isinstance(v, str):
+            # Handle potential JSON string representation if pydantic tries to be smart
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                try:
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    pass # Fallback to comma split
+            
+            # Split by comma and strip whitespace
+            return [key.strip() for key in v.split(",") if key.strip()]
+        elif isinstance(v, list):
+            return v
+        return []
 
 
 @lru_cache(maxsize=1)

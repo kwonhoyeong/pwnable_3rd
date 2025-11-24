@@ -18,20 +18,35 @@ class QueryRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find_by_package(self, package: str) -> List[dict[str, object]]:
-        """패키지로 조회(Look up by package)."""
+    async def find_by_package(self, package: str, version: str | None = None) -> List[dict[str, object]]:
+        """패키지로 조회(Look up by package).
+
+        Args:
+            package: Package name to search for
+            version: Optional package version. If provided, filters CVEs by version_range.
+                    If None, returns all CVEs for the package.
+        """
+
+        # Build WHERE clause conditionally based on version parameter
+        where_clause = "WHERE package = :package"
+        params: dict[str, object] = {"package": package}
+
+        if version:
+            where_clause += " AND version_range = :version"
+            params["version"] = version
 
         query = text(
-            """
+            f"""
             WITH expanded AS (
                 SELECT package, version_range, UNNEST(cve_ids) AS cve_id
                 FROM package_cve_mapping
-                WHERE package = :package
+                {where_clause}
             )
             SELECT exp.cve_id,
                    es.epss_score,
                    cs.cvss_score,
                    ar.risk_level,
+                   ar.risk_score,
                    ar.analysis_summary,
                    ar.recommendations
             FROM expanded exp
@@ -41,7 +56,7 @@ class QueryRepository:
             """
         )
         try:
-            result = await self._session.execute(query, {"package": package})
+            result = await self._session.execute(query, params)
             rows = result.fetchall()
 
             if not rows:
@@ -57,6 +72,7 @@ class QueryRepository:
                     "epss_score": float(row.epss_score) if row.epss_score is not None else None,
                     "cvss_score": float(row.cvss_score) if row.cvss_score is not None else None,
                     "risk_level": row.risk_level or "Unknown",
+                    "risk_score": float(row.risk_score) if hasattr(row, "risk_score") and row.risk_score is not None else 0.0,
                     "analysis_summary": row.analysis_summary or "",
                     "recommendations": row.recommendations or [],
                 }
@@ -81,6 +97,7 @@ class QueryRepository:
                    es.epss_score,
                    cs.cvss_score,
                    ar.risk_level,
+                   ar.risk_score,
                    ar.analysis_summary,
                    ar.recommendations
             FROM analysis_results ar
@@ -106,6 +123,7 @@ class QueryRepository:
                     "epss_score": float(row.epss_score) if row.epss_score is not None else None,
                     "cvss_score": float(row.cvss_score) if row.cvss_score is not None else None,
                     "risk_level": row.risk_level or "Unknown",
+                    "risk_score": float(row.risk_score) if hasattr(row, "risk_score") and row.risk_score is not None else 0.0,
                     "analysis_summary": row.analysis_summary or "",
                     "recommendations": row.recommendations or [],
                 }
@@ -179,7 +197,7 @@ class QueryRepository:
 
         # Update with actual data
         for row in rows:
-            risk_level = row.risk_level or "Unknown"
+            risk_level = (row.risk_level or "Unknown").upper()
             stats[risk_level] = row.count
 
         return stats

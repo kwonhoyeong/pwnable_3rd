@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS analysis_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cve_id TEXT NOT NULL UNIQUE,
     risk_level TEXT NOT NULL,
+    risk_score REAL,
     recommendations TEXT NOT NULL DEFAULT '[]',  -- JSON array
     analysis_summary TEXT NOT NULL,
     generated_at TIMESTAMP NOT NULL,

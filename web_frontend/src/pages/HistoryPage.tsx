@@ -69,11 +69,11 @@ export const HistoryPage: React.FC = () => {
     <div className="space-y-8">
       {/* Header Section */}
       <div>
-        <h1 className="text-4xl font-bold text-slate-900 dark:text-white">
-          Analysis History
+        <h1 className="text-4xl font-bold text-white">
+          분석 히스토리
         </h1>
-        <p className="text-slate-600 dark:text-slate-400 mt-2">
-          View your previous vulnerability scans and analysis results
+        <p className="text-white mt-2">
+          이전 취약점 스캔 및 분석 결과를 확인하세요
         </p>
       </div>
 
@@ -83,10 +83,10 @@ export const HistoryPage: React.FC = () => {
           <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
           <div>
             <p className="font-medium text-red-800 dark:text-red-200">
-              Failed to load history
+              히스토리를 불러오는데 실패했습니다
             </p>
             <p className="text-sm text-red-700 dark:text-red-300">
-              Please try again later or refresh the page
+              잠시 후 다시 시도하거나 페이지를 새로고침하세요
             </p>
           </div>
         </div>
@@ -104,11 +104,11 @@ export const HistoryPage: React.FC = () => {
           {/* Pagination Controls */}
           <div className="flex items-center justify-between">
             <div className="text-sm text-slate-600 dark:text-slate-400">
-              Page <span className="font-semibold">{currentPage}</span>
+              페이지 <span className="font-semibold">{currentPage}</span>
               {hasNextPage && (
                 <span>
                   {' '}
-                  (showing {displayedScans.length} of {totalReturned}+ results)
+                  ({totalReturned}+ 건 중 {displayedScans.length} 건 표시)
                 </span>
               )}
             </div>
@@ -122,7 +122,7 @@ export const HistoryPage: React.FC = () => {
                 onClick={handlePreviousPage}
               >
                 <ChevronLeft className="w-4 h-4" />
-                Previous
+                이전
               </Button>
 
               <Button
@@ -131,7 +131,7 @@ export const HistoryPage: React.FC = () => {
                 disabled={!hasNextPage}
                 onClick={handleNextPage}
               >
-                Next
+                다음
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
@@ -141,7 +141,7 @@ export const HistoryPage: React.FC = () => {
           {!hasNextPage && currentPage > 1 && (
             <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
               <p className="text-sm text-blue-800 dark:text-blue-200">
-                You've reached the end of the history. {displayedScans.length} results shown on this page.
+                히스토리의 끝입니다. 이 페이지에 {displayedScans.length} 건의 결과가 표시됩니다.
               </p>
             </Card>
           )}
@@ -152,10 +152,10 @@ export const HistoryPage: React.FC = () => {
       {!isLoading && totalReturned === 0 && (
         <Card className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-center py-12">
           <p className="text-slate-600 dark:text-slate-400">
-            No vulnerability scans found in history.
+            히스토리에 취약점 스캔 기록이 없습니다.
           </p>
           <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
-            Start by searching for a package on the dashboard.
+            대시보드에서 패키지를 검색하여 시작하세요.
           </p>
         </Card>
       )}

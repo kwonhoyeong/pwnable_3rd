@@ -2,17 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, FileText } from 'lucide-react';
 import { clsx } from 'clsx';
 
-// ScanRecord interface is now imported from endpoints.ts
-export interface ScanRecord {
-  cve_id: string;
-  risk_level: string;
-  priority_score: number | null;
-  analysis_summary: string;
-  created_at: string | null;
-}
+import { ScanRecord } from '../../api/endpoints';
 
 interface RecentScansTableProps {
   data?: ScanRecord[];
@@ -52,70 +45,122 @@ export const RecentScansTable: React.FC<RecentScansTableProps> = ({
   };
 
   return (
-    <Card title="Recent Scans" className="overflow-hidden">
+    <Card title="최근 취약점 보고서" className="overflow-hidden">
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse"></div>
+            <div
+              key={i}
+              className="h-16 rounded animate-pulse"
+              style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+            />
           ))}
         </div>
       ) : data.length === 0 ? (
-        <div className="text-center py-8 text-slate-500 dark:text-slate-400">
-          No recent scans found
+        <div
+          className="text-center py-12"
+          style={{ color: 'var(--color-text-tertiary)' }}
+        >
+          <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>취약점 보고서가 없습니다</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className={clsx(
-              'bg-slate-50 dark:bg-slate-800',
-              'border-b border-slate-200 dark:border-slate-700'
-            )}>
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">CVE ID</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">Risk Level</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">Score</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">Summary</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">Date</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700 dark:text-slate-300">Action</th>
+            <thead>
+              <tr
+                className="border-b"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
+                >
+                  분석 정보
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
+                >
+                  위험도
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
+                >
+                  점수
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
+                >
+                  요약
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
+                >
+                  날짜
+                </th>
+                <th
+                  className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-white"
+                >
+                  상세보기
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+            <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
               {data.map((scan) => (
                 <tr
                   key={scan.cve_id}
-                  className={clsx(
-                    'hover:bg-slate-50 dark:hover:bg-slate-800/50',
-                    'border-b border-slate-200 dark:border-slate-700',
-                    'transition-colors'
-                  )}
+                  className="transition-colors hover:bg-opacity-50"
+                  style={{
+                    '--hover-bg': 'var(--color-bg-tertiary)',
+                  } as React.CSSProperties}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
                 >
-                  <td className="px-4 py-3 text-sm font-medium text-slate-900 dark:text-white">
+                  <td
+                    className="px-4 py-4 text-sm font-mono"
+                    style={{ color: 'var(--color-text-primary)' }}
+                  >
                     {scan.cve_id}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4">
                     <Badge variant={getRiskVariant(scan.risk_level)}>
                       {scan.risk_level}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
-                    {typeof scan.priority_score === 'number' ? scan.priority_score.toFixed(1) : 'N/A'}
+                  <td
+                    className="px-4 py-4 text-sm font-semibold"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
+                    {typeof scan.risk_score === 'number' ? scan.risk_score.toFixed(1) : 'N/A'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate">
-                    {scan.analysis_summary}
+                  <td
+                    className="px-4 py-4 text-sm max-w-xs truncate"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
+                    {scan.analysis_summary || '요약 정보가 없습니다'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-500">
+                  <td
+                    className="px-4 py-4 text-sm"
+                    style={{ color: 'var(--color-text-tertiary)' }}
+                  >
                     {formatDate(scan.created_at)}
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-4 text-center">
                     <Link
                       to={`/report/${scan.cve_id}`}
-                      className={clsx(
-                        'inline-flex items-center justify-center p-2',
-                        'hover:bg-slate-200 dark:hover:bg-slate-700',
-                        'rounded-lg transition-colors'
-                      )}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded
+                                 transition-all hover-lift"
+                      style={{
+                        backgroundColor: 'var(--color-bg-elevated)',
+                        color: 'var(--color-text-primary)',
+                        border: '1px solid var(--color-border)',
+                      }}
                     >
-                      <ChevronRight className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                      보고서 보기
+                      <ChevronRight className="w-3 h-3" />
                     </Link>
                   </td>
                 </tr>

@@ -56,3 +56,18 @@ def get_retry_decorator() -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         retry=retry_if_exception(_is_retryable_exception),
         reraise=True,
     )
+
+
+def get_retry_strategy() -> dict[str, Any]:
+    """
+    AsyncRetrying용 재시도 전략 설정 반환(Return retry strategy configuration for AsyncRetrying).
+    
+    Returns:
+        Dictionary of arguments for AsyncRetrying
+    """
+    return {
+        "stop": stop_after_attempt(3),
+        "wait": wait_exponential(multiplier=1, min=1, max=4),
+        "retry": retry_if_exception(_is_retryable_exception),
+        "reraise": True,
+    }

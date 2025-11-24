@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
+import { Components } from 'react-markdown';
 import { ArrowLeft, AlertCircle, Shield, Target, ListChecks, Loader } from 'lucide-react';
 import { queryAPI, CVEDetail } from '../api/endpoints';
 import { Card } from '../components/ui/Card';
@@ -42,11 +43,103 @@ export const ReportDetailPage: React.FC = () => {
   const cveData: CVEDetail | undefined = data?.cve_list?.[0];
 
   // ============================================================================
+  // MARKDOWN CUSTOM COMPONENTS (Typography Enhancement)
+  // ============================================================================
+
+  /**
+   * Custom ReactMarkdown components for enhanced readability
+   */
+  const markdownComponents: Components = {
+    // Headings: Clear hierarchy with generous spacing
+    h1: ({ node, ...props }) => (
+      <h1 className="text-3xl font-bold text-white mt-8 mb-4 pb-2 border-b-2 border-slate-700" {...props} />
+    ),
+    h2: ({ node, ...props }) => (
+      <h2 className="text-2xl font-semibold text-white mt-8 mb-4" {...props} />
+    ),
+    h3: ({ node, ...props }) => (
+      <h3 className="text-xl font-semibold text-white mt-6 mb-3" {...props} />
+    ),
+    h4: ({ node, ...props }) => (
+      <h4 className="text-lg font-semibold text-white mt-5 mb-2" {...props} />
+    ),
+
+    // Paragraphs: Wide line spacing, generous bottom margin
+    p: ({ node, ...props }) => (
+      <p className="leading-loose mb-4 text-white" {...props} />
+    ),
+
+    // Lists: Clear spacing between items
+    ul: ({ node, ...props }) => (
+      <ul className="space-y-2 my-4 ml-6 list-disc marker:text-blue-400" {...props} />
+    ),
+    ol: ({ node, ...props }) => (
+      <ol className="space-y-2 my-4 ml-6 list-decimal marker:text-blue-400" {...props} />
+    ),
+    li: ({ node, ...props }) => (
+      <li className="leading-relaxed pl-2 text-white" {...props} />
+    ),
+
+    // Code blocks: Dark background with padding
+    pre: ({ node, ...props }) => (
+      <pre className="bg-slate-950 text-slate-100 p-4 rounded-lg overflow-x-auto my-5 border border-slate-700" {...props} />
+    ),
+    code: ({ node, inline, ...props }) =>
+      inline ? (
+        <code className="bg-slate-800 text-blue-400 px-1.5 py-0.5 rounded text-sm font-mono" {...props} />
+      ) : (
+        <code className="font-mono text-sm" {...props} />
+      ),
+
+    // Blockquotes: Left border with background
+    blockquote: ({ node, ...props }) => (
+      <blockquote className="border-l-4 border-blue-500 bg-blue-900/20 pl-4 py-3 my-5 italic text-white" {...props} />
+    ),
+
+    // Strong/Bold: Emphasis color
+    strong: ({ node, ...props }) => (
+      <strong className="font-bold text-white" {...props} />
+    ),
+
+    // Links: Distinctive styling
+    a: ({ node, ...props }) => (
+      <a className="text-blue-400 hover:underline font-medium" {...props} />
+    ),
+
+    // Horizontal rule: Subtle divider
+    hr: ({ node, ...props }) => (
+      <hr className="my-8 border-slate-600" {...props} />
+    ),
+
+    // Tables: Structured presentation
+    table: ({ node, ...props }) => (
+      <div className="overflow-x-auto my-5">
+        <table className="min-w-full divide-y divide-slate-600" {...props} />
+      </div>
+    ),
+    thead: ({ node, ...props }) => (
+      <thead className="bg-slate-800" {...props} />
+    ),
+    tbody: ({ node, ...props }) => (
+      <tbody className="divide-y divide-slate-700" {...props} />
+    ),
+    tr: ({ node, ...props }) => (
+      <tr className="hover:bg-slate-800/50" {...props} />
+    ),
+    th: ({ node, ...props }) => (
+      <th className="px-4 py-3 text-left text-sm font-semibold text-white" {...props} />
+    ),
+    td: ({ node, ...props }) => (
+      <td className="px-4 py-3 text-sm text-white" {...props} />
+    ),
+  };
+
+  // ============================================================================
   // HELPER FUNCTIONS
   // ============================================================================
 
   /**
-   * Determine risk score color based on priority_score
+   * Determine risk score color based on risk_score
    */
   const getRiskScoreColor = (score: number): string => {
     if (score >= 9.0) return 'text-critical-600 dark:text-critical-400';
@@ -155,8 +248,8 @@ export const ReportDetailPage: React.FC = () => {
       {/* Header Section */}
       <div className="flex items-start justify-between gap-6 pb-6 border-b border-slate-200 dark:border-slate-700">
         <div>
-          <h1 className="text-4xl font-bold text-slate-900 dark:text-white">{cveData.cve_id}</h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-2">Vulnerability Analysis & Recommendations</p>
+          <h1 className="text-4xl font-bold text-white">{cveData.cve_id}</h1>
+          <p className="text-slate-400 mt-2">Vulnerability Analysis & Recommendations</p>
         </div>
         <Badge variant={getRiskVariant(cveData.risk_level)} className="text-lg px-4 py-2">
           {cveData.risk_level}
@@ -169,8 +262,11 @@ export const ReportDetailPage: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           {/* Analysis Report Card */}
           <Card title="Analysis Report">
-            <div className="prose prose-slate dark:prose-invert max-w-none">
-              <ReactMarkdown>{cveData.analysis_summary || 'No analysis available'}</ReactMarkdown>
+            {/* Enhanced Markdown Rendering with Custom Typography */}
+            <div className="prose-custom max-w-none">
+              <ReactMarkdown components={markdownComponents}>
+                {cveData.analysis_summary || 'No analysis available'}
+              </ReactMarkdown>
             </div>
           </Card>
         </div>
@@ -181,26 +277,25 @@ export const ReportDetailPage: React.FC = () => {
           <Card title="Risk Score">
             <div className="space-y-3">
               <div className="flex items-baseline gap-2">
-                <span className={`text-5xl font-bold ${getRiskScoreColor(cveData.priority_score)}`}>
-                  {cveData.priority_score.toFixed(1)}
+                <span className={`text-5xl font-bold ${getRiskScoreColor(cveData.risk_score)}`}>
+                  {cveData.risk_score.toFixed(1)}
                 </span>
                 <span className="text-sm text-slate-600 dark:text-slate-400">/ 10</span>
               </div>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Priority: <span className="font-semibold">{cveData.priority_label}</span>
+                Priority: <span className="font-semibold">{cveData.risk_label}</span>
               </p>
               <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full ${
-                    cveData.priority_score >= 9.0
-                      ? 'bg-critical-600'
-                      : cveData.priority_score >= 7.0
-                        ? 'bg-high-600'
-                        : cveData.priority_score >= 5.0
-                          ? 'bg-medium-600'
-                          : 'bg-low-600'
-                  }`}
-                  style={{ width: `${(cveData.priority_score / 10) * 100}%` }}
+                  className={`h-full rounded-full ${cveData.risk_score >= 9.0
+                    ? 'bg-critical-600'
+                    : cveData.risk_score >= 7.0
+                      ? 'bg-high-600'
+                      : cveData.risk_score >= 5.0
+                        ? 'bg-medium-600'
+                        : 'bg-low-600'
+                    }`}
+                  style={{ width: `${(cveData.risk_score / 10) * 100}%` }}
                 />
               </div>
             </div>
@@ -246,30 +341,13 @@ export const ReportDetailPage: React.FC = () => {
                 {cveData.recommendations.map((rec, idx) => (
                   <li key={idx} className="flex gap-3 text-sm">
                     <ListChecks className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                    <span className="text-slate-700 dark:text-slate-300">{rec}</span>
+                    <span className="text-white">{rec}</span>
                   </li>
                 ))}
               </ul>
             </Card>
           )}
 
-          {/* Created At Card */}
-          {cveData.created_at && (
-            <Card>
-              <div className="text-center">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Analyzed on</p>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mt-1">
-                  {new Date(cveData.created_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </p>
-              </div>
-            </Card>
-          )}
         </div>
       </div>
     </div>

@@ -10,7 +10,7 @@ import client from './client';
 /**
  * CVEDetail - Detailed information about a single CVE
  * Matches backend CVEDetail model exactly
- * Note: priority_score and priority_label are added by the service layer
+ * Note: risk_score and risk_label are added by the service layer
  */
 export interface CVEDetail {
   cve_id: string;
@@ -19,8 +19,8 @@ export interface CVEDetail {
   risk_level: string; // "CRITICAL", "HIGH", "MEDIUM", "LOW", "Unknown"
   analysis_summary: string; // Markdown formatted text
   recommendations: string[];
-  priority_score: number; // Float - calculated by service (risk weight + cvss + epss)
-  priority_label: string; // "P1", "P2", "P3"
+  risk_score: number; // Float - calculated by service (risk weight + cvss + epss)
+  risk_label: string; // "P1", "P2", "P3"
 }
 
 /**
@@ -125,12 +125,14 @@ export const queryAPI = {
 
   /**
    * Generic query endpoint - supports both package and CVE ID search
-   * GET /api/v1/query?package={packageName}&cve_id={cveId}
+   * GET /api/v1/query?package={packageName}&version={version}&cve_id={cveId}
    *
-   * @param params - Query parameters { package?: string; cve_id?: string }
+   * @param params - Query parameters { package?: string; version?: string; cve_id?: string }
    * @returns Promise<QueryResponse> containing array of CVEDetail objects
+   *
+   * Note: For package searches, version parameter is optional (defaults to "latest" on backend)
    */
-  query: (params: { package?: string; cve_id?: string }): Promise<AxiosResponse<QueryResponse>> =>
+  query: (params: { package?: string; version?: string; cve_id?: string }): Promise<AxiosResponse<QueryResponse>> =>
     client.get<QueryResponse>('/api/v1/query', { params }),
 
   /**
@@ -182,7 +184,7 @@ export const queryAPI = {
 export interface ScanRecord {
   cve_id: string;
   risk_level: string;
-  priority_score: number | null; // Unified score field (priority_score from CVE, risk_score from history)
+  risk_score: number | null; // Unified score field (risk_score from CVE, risk_score from history)
   analysis_summary: string;
   created_at: string | null; // ISO 8601 timestamp or null
 }
@@ -196,7 +198,7 @@ export interface ScanRecord {
 export const convertCVEDetailToScanRecord = (cve: CVEDetail): ScanRecord => ({
   cve_id: cve.cve_id,
   risk_level: cve.risk_level,
-  priority_score: cve.priority_score, // Use priority_score from CVEDetail
+  risk_score: cve.risk_score, // Use risk_score from CVEDetail
   analysis_summary: cve.analysis_summary,
   created_at: null, // CVEDetail doesn't have created_at
 });
@@ -220,7 +222,7 @@ export const convertHistoryToScanRecords = (records: HistoryRecord[]): ScanRecor
   records.map((record) => ({
     cve_id: record.cve_id,
     risk_level: record.risk_level,
-    priority_score: record.risk_score, // Map risk_score from history to priority_score for unified display
+    risk_score: record.risk_score, // Map risk_score from history to risk_score for unified display
     analysis_summary: record.analysis_summary,
     created_at: record.created_at,
   }));

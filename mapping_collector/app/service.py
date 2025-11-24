@@ -56,13 +56,18 @@ class MappingService:
 
     @staticmethod
     def _build_params(package: str, version_range: str, ecosystem: str) -> Dict[str, str]:
-        params: Dict[str, str] = {"package": package, "ecosystem": ecosystem}
+        params: Dict[str, str] = {}
         if ecosystem == "pip":
+            params["package"] = package
             params["version"] = version_range
+            params["ecosystem"] = ecosystem # Keep for pip/apt if they use it?
         elif ecosystem == "apt":
+            params["package"] = package
             params["release"] = version_range
+            params["ecosystem"] = ecosystem
         else:
-            params["version_range"] = version_range
+            # NVD 2.0 uses keywordSearch
+            params["keywordSearch"] = package
         return params
 
     async def _fetch_with_perplexity(
@@ -213,7 +218,7 @@ class MappingService:
             "아래 패키지와 버전 범위에 영향을 주는 CVE ID를 최신 자료 기준으로 찾아 JSON으로만 답해."
             "\n\n패키지: {package}\n버전 범위: {version_range}\n생태계: {ecosystem}\n\n"
             "출력 형식:\n"
-            '{\n  "cve_ids": ["CVE-YYYY-XXXX", ...],\n  "source": "<참조 링크 또는 not_found>"\n}\n\n'
+            '{{\n  "cve_ids": ["CVE-YYYY-XXXX", ...],\n  "source": "<참조 링크 또는 not_found>"\n}}\n\n'
             "반드시 JSON만 출력하고 자연어 설명이나 코드블록은 포함하지 마."
             "찾을 수 없으면 빈 배열과 \"source\": \"not_found\" 로 응답해."
         ).format(package=package, version_range=version_range, ecosystem=ecosystem)

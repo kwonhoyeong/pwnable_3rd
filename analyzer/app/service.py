@@ -69,8 +69,8 @@ class RecommendationGenerator:
     @staticmethod
     def _fallback_recommendations() -> List[str]:
         return [
-            "패키지를 최신 버전으로 업그레이드하세요(Upgrade package to latest).",
-            "추가 모니터링을 수행하세요(Enable heightened monitoring).",
+            "패키지를 최신 버전으로 업그레이드하세요 (Upgrade package to latest).",
+            "보안 모니터링을 강화하세요 (Enable heightened monitoring).",
         ]
 
 
@@ -106,17 +106,48 @@ class EnterpriseAnalysisGenerator:
         )
 
         try:
-            # Call Claude with system prompt
-            response = await self._client.chat(user_prompt, system=SYSTEM_PROMPT)
+            # Call Claude with system prompt to generate English report
+            english_response = await self._client.chat(user_prompt, system=SYSTEM_PROMPT)
 
-            # Extract AI risk level from response
-            ai_risk_level = self._extract_ai_risk_level(response)
+            # Extract AI risk level from English response
+            ai_risk_level = self._extract_ai_risk_level(english_response)
 
-            logger.info("Successfully generated enterprise analysis for %s (AI Risk: %s)", payload.cve_id, ai_risk_level)
-            return response, ai_risk_level
+            # Translate to Korean
+            korean_response = await self._translate_to_korean(english_response)
+
+            logger.info("Successfully generated and translated enterprise analysis for %s (AI Risk: %s)", payload.cve_id, ai_risk_level)
+            return korean_response, ai_risk_level
         except RuntimeError as exc:
             logger.info("Claude 분석 실패, 폴백 사용(Analysis falling back): %s", exc)
             return self._fallback_summary(), "MEDIUM"
+
+    async def _translate_to_korean(self, english_report: str) -> str:
+        """영어 보고서를 한국어로 번역(Translate English report to Korean)."""
+        
+        translation_prompt = f"""다음 보안 분석 보고서를 한국어로 번역해주세요.
+        
+**중요한 번역 규칙**:
+1. 기술 용어는 반드시 영어를 괄호 안에 병기하세요.
+   - 예: "원격 코드 실행(Remote Code Execution)"
+   - 예: "프로토타입 오염(Prototype Pollution)"
+2. 섹션 헤더는 한국어와 영어를 함께 표기하세요.
+   - 예: "## 🚨 경영진 요약 (Executive Summary)"
+3. 마크다운 형식은 그대로 유지하세요.
+4. "AI Estimated Risk" 라인은 그대로 유지하세요.
+5. 전문적이고 권위있는 어조를 유지하세요.
+
+번역할 보고서:
+
+{english_report}
+
+번역된 한국어 보고서만 출력하세요. 추가 설명이나 주석은 불필요합니다."""
+
+        try:
+            korean_report = await self._client.chat(translation_prompt)
+            return korean_report
+        except RuntimeError as exc:
+            logger.warning("번역 실패, 영어 보고서 반환(Translation failed, returning English): %s", exc)
+            return english_report
 
     @staticmethod
     def _build_threat_context(payload: AnalyzerInput) -> str:
@@ -154,20 +185,29 @@ class EnterpriseAnalysisGenerator:
 
     @staticmethod
     def _fallback_summary() -> str:
-        return """## 🚨 Executive Summary
-Unable to generate AI analysis. Manual review required.
+        return """## 🚨 경영진 요약 (Executive Summary)
+AI 분석을 생성할 수 없습니다. 수동 검토가 필요합니다. (Unable to generate AI analysis. Manual review required.)
 
-## 🛠️ Technical Deep Dive
-Insufficient data for automated analysis.
+## 📊 취약점 스코어카드 (Vulnerability Scorecard)
+자동 분석을 위한 데이터가 부족합니다. (Insufficient data for automated analysis.)
 
-## 💻 Mitigation & Code Fix
-See security advisories and package documentation.
+## ⚔️ 공격 시나리오 (Attack Scenario)
+자동 분석을 위한 데이터가 부족합니다. (Insufficient data for automated analysis.)
+
+## 🛡️ CIA 영향 분석 (CIA Impact Analysis)
+자동 분석을 위한 데이터가 부족합니다. (Insufficient data for automated analysis.)
+
+## 🛠️ 기술적 심층 분석 (Technical Deep Dive)
+자동 분석을 위한 데이터가 부족합니다. (Insufficient data for automated analysis.)
+
+## ✅ 대응 및 완화 전략 (Remediation Strategy)
+보안 권고 및 패키지 문서를 참조하세요. (See security advisories and package documentation.)
 
 ## ⚖️ AI Estimated Risk
 MEDIUM
 
 ---
-*Note: This is a fallback report due to AI service unavailability.*"""
+*참고: 이 보고서는 AI 서비스 사용 불가로 인한 대체 보고서입니다. (Note: This is a fallback report due to AI service unavailability.)*"""
 
 
 class WeightedScoringEngine:
@@ -250,18 +290,6 @@ class AnalyzerService:
 
         # Generate recommendations
         recommendations = await self._recommendation.generate(payload, risk_level)
-
-        # Add scoring information to summary
-        scoring_note = f"\n\n**Weighted Risk Score**: {risk_score:.2f}/10 ({self._scoring.score_to_risk_level(risk_score)})"
-        if payload.epss_score is None or payload.cvss_score is None:
-            missing = []
-            if payload.cvss_score is None:
-                missing.append("CVSS")
-            if payload.epss_score is None:
-                missing.append("EPSS")
-            scoring_note += f"\n*Note: {', '.join(missing)} score(s) unavailable; weighted calculation uses 0.0 for missing values.*"
-
-        analysis_summary = analysis_summary + scoring_note if analysis_summary else scoring_note
 
         logger.info(
             "Analysis completed for %s: risk_level=%s, score=%.2f",

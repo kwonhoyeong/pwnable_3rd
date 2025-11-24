@@ -8,54 +8,28 @@ export default {
   theme: {
     extend: {
       colors: {
-        critical: {
-          50: "#fee2e2",
-          100: "#fecaca",
-          200: "#fca5a5",
-          300: "#f87171",
-          400: "#f45454",
-          500: "#ef4444",
-          600: "#dc2626",
-          700: "#b91c1c",
-          800: "#991b1b",
-          900: "#7f1d1d",
+        background: '#111315', // Deep Charcoal
+        surface: '#1A1D1F',    // Soft Black
+        primary: '#6C5DD3',    // Royal Purple
+        secondary: '#6F767E',  // Slate Grey
+        accent: {
+          blue: '#3F8CFF',
+          orange: '#FF754C',
+          yellow: '#FFCE73',
+          green: '#7FBA7A',
         },
-        high: {
-          50: "#fef3c7",
-          100: "#fde68a",
-          200: "#fcd34d",
-          300: "#fbbf24",
-          400: "#f59e0b",
-          500: "#d97706",
-          600: "#b45309",
-          700: "#92400e",
-          800: "#78350f",
-          900: "#451a03",
+        text: {
+          main: '#FFFFFF',
+          muted: '#6F767E',
         },
-        medium: {
-          50: "#dbeafe",
-          100: "#bfdbfe",
-          200: "#93c5fd",
-          300: "#60a5fa",
-          400: "#3b82f6",
-          500: "#2563eb",
-          600: "#1d4ed8",
-          700: "#1e40af",
-          800: "#1e3a8a",
-          900: "#172554",
-        },
-        low: {
-          50: "#dcfce7",
-          100: "#bbf7d0",
-          200: "#86efac",
-          300: "#4ade80",
-          400: "#22c55e",
-          500: "#16a34a",
-          600: "#15803d",
-          700: "#166534",
-          800: "#1f2937",
-          900: "#1a3d2d",
-        },
+        // Semantic mappings for compatibility
+        critical: '#FF754C',
+        high: '#FFCE73',
+        medium: '#3F8CFF',
+        low: '#7FBA7A',
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
       },
     },
   },

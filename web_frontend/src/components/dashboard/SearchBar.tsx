@@ -20,7 +20,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading = fals
     setError('');
 
     if (!packageName.trim()) {
-      setError('Please enter a package name or CVE ID');
+      setError('패키지 이름 또는 CVE ID를 입력하세요');
       return;
     }
 
@@ -37,25 +37,30 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading = fals
         console.log('Searching for package:', trimmedQuery, 'version:', version);
       }
     }
-
-    // Don't clear the fields - user might want to refine search
   };
 
   return (
-    <div className="mb-8">
+    <div className="card p-6 mb-6">
       <form onSubmit={handleSearch} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Package Name Input */}
           <div className="md:col-span-2 relative">
-            <label htmlFor="package" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Package Name
+            <label
+              htmlFor="package"
+              className="block text-sm font-medium mb-2"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              패키지 이름
             </label>
             <div className="relative">
-              <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400 dark:text-slate-500" />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5"
+                style={{ color: 'var(--color-text-tertiary)' }}
+              />
               <input
                 id="package"
                 type="text"
-                placeholder="e.g., react, lodash, or CVE-2023-1234"
+                placeholder="예: react, lodash, CVE-2023-1234"
                 value={packageName}
                 onChange={(e) => {
                   setPackageName(e.target.value);
@@ -63,41 +68,49 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading = fals
                 }}
                 disabled={isLoading}
                 className={clsx(
-                  'w-full pl-10 pr-4 py-2',
-                  'border border-slate-300 dark:border-slate-600',
-                  'bg-white dark:bg-slate-800',
-                  'text-slate-900 dark:text-white',
-                  'rounded-lg',
-                  'focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400',
-                  'disabled:bg-slate-50 dark:disabled:bg-slate-900 disabled:cursor-not-allowed',
-                  'placeholder:text-slate-500 dark:placeholder:text-slate-400'
+                  'w-full pl-11 pr-4 py-2.5',
+                  'rounded-lg border',
+                  'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'transition-all duration-200'
                 )}
+                style={{
+                  backgroundColor: 'var(--color-bg-primary)',
+                  borderColor: 'var(--color-border)',
+                  color: 'var(--color-text-primary)',
+                }}
               />
             </div>
           </div>
 
           {/* Version Input */}
           <div className="md:col-span-1">
-            <label htmlFor="version" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Version
+            <label
+              htmlFor="version"
+              className="block text-sm font-medium mb-2"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              버전
             </label>
             <input
               id="version"
               type="text"
-              placeholder="e.g., 1.0.0"
+              placeholder="최신"
               value={version}
               onChange={(e) => setVersion(e.target.value)}
               disabled={isLoading}
               className={clsx(
-                'w-full px-4 py-2',
-                'border border-slate-300 dark:border-slate-600',
-                'bg-white dark:bg-slate-800',
-                'text-slate-900 dark:text-white',
-                'rounded-lg',
-                'focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400',
-                'disabled:bg-slate-50 dark:disabled:bg-slate-900 disabled:cursor-not-allowed',
-                'placeholder:text-slate-500 dark:placeholder:text-slate-400'
+                'w-full px-4 py-2.5',
+                'rounded-lg border',
+                'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+                'transition-all duration-200'
               )}
+              style={{
+                backgroundColor: 'var(--color-bg-primary)',
+                borderColor: 'var(--color-border)',
+                color: 'var(--color-text-primary)',
+              }}
             />
           </div>
 
@@ -110,14 +123,21 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading = fals
               isLoading={isLoading}
               className="w-full"
             >
-              {isLoading ? 'Analyzing...' : 'Analyze'}
+              {isLoading ? '분석 중...' : '분석'}
             </Button>
           </div>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+          <div
+            className="flex items-center gap-2 p-3 rounded-lg border"
+            style={{
+              backgroundColor: 'rgba(248, 113, 113, 0.1)',
+              borderColor: 'rgba(248, 113, 113, 0.3)',
+              color: 'var(--color-critical)',
+            }}
+          >
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <p className="text-sm">{error}</p>
           </div>

@@ -32,6 +32,7 @@ async def analyze(data: AnalyzerInput, session=Depends(get_session)) -> Analyzer
         result.recommendations,
         result.analysis_summary,
         result.generated_at,
+        result.risk_score,
     )
     await session.commit()
     return result

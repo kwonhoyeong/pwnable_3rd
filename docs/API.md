@@ -1,8 +1,8 @@
-# API SPECIFICATION
+# API 명세서
 
 ## MappingCollector
-- Endpoint: `POST /collect`
-- Request JSON:
+- 엔드포인트: `POST /collect`
+- 요청 JSON:
   ```json
   {
     "package": "lodash",
@@ -10,7 +10,7 @@
     "collected_at": "2025-10-24T12:34:56Z"
   }
   ```
-- Response JSON:
+- 응답 JSON:
   ```json
   {
     "package": "lodash",
@@ -19,17 +19,17 @@
     "collected_at": "2025-10-24T12:34:56Z"
   }
   ```
-- Errors:
-  - `400` 유효성 오류(Validation error)
-  - `500` 내부 서버 오류(Internal server error)
+- 오류:
+  - `400` 유효성 오류
+  - `500` 내부 서버 오류
 
 ## EPSSFetcher
-- Endpoint: `POST /api/v1/epss`
-- Request JSON:
+- 엔드포인트: `POST /api/v1/epss`
+- 요청 JSON:
   ```json
   {"cve_id": "CVE-2023-1234"}
   ```
-- Response JSON:
+- 응답 JSON:
   ```json
   {
     "cve_id": "CVE-2023-1234",
@@ -37,17 +37,17 @@
     "collected_at": "2025-10-24T12:34:56Z"
   }
   ```
-- Errors:
-  - `400` 잘못된 입력(Bad request)
-  - `502` 외부 API 실패(Upstream failure)
+- 오류:
+  - `400` 잘못된 입력
+  - `502` 외부 API 실패
 
 ## CVSSFetcher
-- Endpoint: `POST /api/v1/cvss`
-- Request JSON:
+- 엔드포인트: `POST /api/v1/cvss`
+- 요청 JSON:
   ```json
   {"cve_id": "CVE-2023-1234"}
   ```
-- Response JSON:
+- 응답 JSON:
   ```json
   {
     "cve_id": "CVE-2023-1234",
@@ -56,13 +56,13 @@
     "collected_at": "2025-10-24T12:34:56Z"
   }
   ```
-- Errors:
-  - `400` 잘못된 입력(Bad request)
-  - `502` 외부 API 실패(Upstream failure)
+- 오류:
+  - `400` 잘못된 입력
+  - `502` 외부 API 실패
 
 ## ThreatAgent
-- Endpoint: `POST /threats`
-- Request JSON:
+- 엔드포인트: `POST /threats`
+- 요청 JSON:
   ```json
   {
     "cve_id": "CVE-2023-1234",
@@ -70,7 +70,7 @@
     "version_range": "<4.17.21"
   }
   ```
-- Response JSON:
+- 응답 JSON:
   ```json
   {
     "cve_id": "CVE-2023-1234",
@@ -87,13 +87,13 @@
     ]
   }
   ```
-- Errors:
-  - `400` 입력 오류(Input error)
-  - `504` AI 응답 지연(AI timeout)
+- 오류:
+  - `400` 입력 오류
+  - `504` AI 응답 지연
 
 ## Analyzer
-- Endpoint: `POST /analyze`
-- Request JSON:
+- 엔드포인트: `POST /analyze`
+- 요청 JSON:
   ```json
   {
     "cve_id": "CVE-2023-1234",
@@ -104,7 +104,7 @@
     "version_range": "<4.17.21"
   }
   ```
-- Response JSON:
+- 응답 JSON:
   ```json
   {
     "cve_id": "CVE-2023-1234",
@@ -115,83 +115,133 @@
     "generated_at": "2025-10-24T12:42:00Z"
   }
   ```
-- Errors:
-  - `400` 입력 오류(Input error)
-  - `500` 분석 실패(Analysis failure)
+- 오류:
+  - `400` 입력 오류
+  - `500` 분석 실패
 
 ## QueryAPI
-- `GET /api/v1/query`: Package or CVE lookups (query params: `package` or `cve_id`)
-  - Response:
-    ```json
-    {
-      "package": "lodash",
-      "cve_list": [
-        {
-          "cve_id": "CVE-2023-1234",
-          "epss_score": 0.87,
-          "cvss_score": 9.8,
-          "risk_level": "CRITICAL",
-          "analysis_summary": "…",
-          "recommendations": ["…"],
-          "priority_score": 345.0,
-          "priority_label": "P1"
-        }
-      ]
-    }
-    ```
-- `GET /api/v1/history`: Paginated analysis history
-  - Query params: `skip` (default 0), `limit` (default 10, max 100)
-  - Response:
-    ```json
-    {
-      "skip": 0,
-      "limit": 10,
-      "total_returned": 2,
-      "records": [
-        {
-          "cve_id": "CVE-2023-1234",
-          "risk_level": "CRITICAL",
-          "risk_score": 8.7,
-          "analysis_summary": "…",
-          "recommendations": ["…"],
-          "generated_at": "2025-10-24T12:42:00Z",
-          "created_at": "2025-10-24T12:42:00Z"
-        }
-      ]
-    }
-    ```
-- `GET /api/v1/stats`: Aggregated risk distribution
-  - Response:
-    ```json
-    {
-      "total_scans": 250,
-      "risk_distribution": {
-        "CRITICAL": 15,
-        "HIGH": 45,
-        "MEDIUM": 120,
-        "LOW": 60,
-        "Unknown": 10
-      }
-    }
-    ```
-- Errors:
-  - `400` 파라미터 누락(Missing parameters)
-  - `404` 데이터 없음(Not found)
-  - `503` 외부 서비스 오류(Database/cache unavailable)
-  - `500` 서버 오류(Server error)
 
-## Authentication
-- 현재 버전은 API 키 인증 없음(No authentication yet). 향후 서비스 토큰 추가 예정.
+### 인증
+**모든 QueryAPI 엔드포인트는 `X-API-Key` 헤더를 통한 인증이 필요합니다.**
 
-## Error Envelope
-- 실패 시 표준 응답 형식:
-  ```json
-  {
-    "error": {
-      "code": "SERVICE_UNAVAILABLE",
-      "message": "상세 오류 메시지",
-      "details": {},
-      "request_id": "f3f8c83e-..."
+예시:
+```bash
+curl -H "X-API-Key: dev-api-key-123" http://localhost:8004/api/v1/query?package=lodash
+```
+
+- 유효한 API 키는 `NT_QUERY_API_KEYS` 환경 변수를 통해 설정됩니다 (쉼표로 구분된 목록).
+- 키가 누락되거나 유효하지 않으면 `401 Unauthorized` 또는 `403 Forbidden`을 반환합니다.
+
+### Rate Limiting (속도 제한)
+- `/api/v1/query`: 분당 5회
+- `/api/v1/history`: 분당 10회
+- `/api/v1/stats`: 분당 5회
+
+제한 초과 시 `429 Too Many Requests`를 반환합니다.
+
+### 엔드포인트
+
+#### `GET /api/v1/query`
+패키지 또는 CVE 조회
+
+**쿼리 파라미터:**
+- `package` (선택): 패키지 이름 (예: "lodash")
+- `cve_id` (선택): CVE 식별자 (예: "CVE-2023-1234")
+- `version` (선택): 패키지 버전 (예: "1.0.0"). 지정하지 않으면 기본값 "latest"
+
+**응답:**
+```json
+{
+  "package": "lodash",
+  "cve_list": [
+    {
+      "cve_id": "CVE-2023-1234",
+      "epss_score": 0.87,
+      "cvss_score": 9.8,
+      "risk_level": "CRITICAL",
+      "analysis_summary": "…",
+      "recommendations": ["…"],
+      "risk_score": 85.7,
+      "risk_label": "P1"
     }
+  ]
+}
+```
+
+**참고:** 응답 스키마가 `priority_score`/`priority_label`에서 `risk_score`/`risk_label`로 변경되었습니다.
+
+#### `GET /api/v1/history`
+페이지네이션된 분석 히스토리
+
+**쿼리 파라미터:**
+- `skip` (기본값: 0): 건너뛸 레코드 수
+- `limit` (기본값: 10, 최대: 100): 반환할 레코드 수
+
+**응답:**
+```json
+{
+  "skip": 0,
+  "limit": 10,
+  "total_returned": 2,
+  "records": [
+    {
+      "cve_id": "CVE-2023-1234",
+      "risk_level": "CRITICAL",
+      "risk_score": 85.7,
+      "analysis_summary": "…",
+      "recommendations": ["…"],
+      "generated_at": "2025-10-24T12:42:00Z",
+      "created_at": "2025-10-24T12:42:00Z"
+    }
+  ]
+}
+```
+
+#### `GET /api/v1/stats`
+집계된 위험도 분포
+
+**응답:**
+```json
+{
+  "total_scans": 250,
+  "risk_distribution": {
+    "CRITICAL": 15,
+    "HIGH": 45,
+    "MEDIUM": 120,
+    "LOW": 60,
+    "Unknown": 10
   }
-  ```
+}
+```
+
+### 오류 응답
+모든 오류는 표준화된 JSON 봉투 형식을 따릅니다:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "사람이 읽을 수 있는 오류 메시지",
+    "details": {},
+    "request_id": "f3f8c83e-..."
+  }
+}
+```
+
+**주요 오류 코드:**
+- `INVALID_INPUT` (400): 누락되거나 유효하지 않은 쿼리 파라미터
+- `RESOURCE_NOT_FOUND` (404): 데이터베이스에서 데이터를 찾을 수 없음
+- `ANALYSIS_IN_PROGRESS` (202): 분석이 시작되어 처리 중
+- `EXTERNAL_SERVICE_ERROR` (503): 데이터베이스 또는 캐시 사용 불가
+- `INTERNAL_ERROR` (500): 예상치 못한 서버 오류
+
+**HTTP 상태 코드:**
+- `200`: 성공
+- `202`: 수락됨 (분석 진행 중)
+- `400`: 잘못된 요청 (유효하지 않은 파라미터)
+- `401`: 인증되지 않음 (API 키 누락)
+- `403`: 금지됨 (유효하지 않은 API 키)
+- `404`: 찾을 수 없음
+- `429`: 요청 제한 초과 (rate limit)
+- `500`: 내부 서버 오류
+- `503`: 서비스 사용 불가

@@ -24,7 +24,7 @@ class ClaudeClient(IAIClient):
         self._timeout = timeout
         self._allow_external = settings.allow_external_calls
         self._default_model = os.getenv("NT_CLAUDE_MODEL", "claude-sonnet-4-5")
-        self._default_max_tokens = 1024
+        self._default_max_tokens = 4096
         # Initialize Anthropic client (API key loaded from ANTHROPIC_API_KEY env var automatically)
         self._client = Anthropic(api_key=self._api_key) if self._api_key else Anthropic()
         if not self._api_key or self._api_key.strip() == "":

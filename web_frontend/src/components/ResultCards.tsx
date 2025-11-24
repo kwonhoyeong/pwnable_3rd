@@ -26,7 +26,7 @@ export const ResultCards: React.FC = () => {
             onClick={() => setActiveIndex(index)}
           >
             <h3>{item.cve_id}</h3>
-            <p className="result-card__priority">우선순위(Priority): {item.priority_label}</p>
+            <p className="result-card__priority">우선순위(Priority): {item.risk_label}</p>
             <p className="result-card__risk">위험도(Risk): {item.risk_level}</p>
             <p className="result-card__epss">
               EPSS:{' '}
@@ -41,7 +41,7 @@ export const ResultCards: React.FC = () => {
       </div>
       <div className="result-grid__detail">
         <h2>{active.cve_id}</h2>
-        <p className="result-detail__priority">우선순위(Priority): {active.priority_label}</p>
+        <p className="result-detail__priority">우선순위(Priority): {active.risk_label}</p>
         <p>{active.analysis_summary}</p>
         <h4>권고 사항(Recommendations)</h4>
         <ul>

@@ -15,7 +15,7 @@ const API_BASE_URL =
 
 const client: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 120000, // 2 minutes for AI analysis
   headers: {
     'Content-Type': 'application/json',
   },
@@ -33,6 +33,11 @@ client.interceptors.request.use((config) => {
   const requestId = sessionStorage.getItem('requestId') || randomId;
   sessionStorage.setItem('requestId', requestId);
   config.headers['X-Request-ID'] = requestId;
+
+  // Add API Key for authentication
+  const apiKey = import.meta.env.VITE_QUERY_API_KEY || 'dev-api-key-123';
+  config.headers['X-API-Key'] = apiKey;
+
   return config;
 });
 

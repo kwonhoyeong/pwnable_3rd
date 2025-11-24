@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,7 +25,7 @@ services:
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -43,9 +43,11 @@ services:
       NT_ENABLE_DATABASE: "true"
       NT_ENABLE_CACHE: "true"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ALLOW_EXTERNAL_CALLS: "true"
+      PYTHONUNBUFFERED: "1"
     volumes:
       - .:/app
-    command: tail -f /dev/null
+    command: python worker.py
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,6 +69,7 @@ services:
       NT_ENABLE_CACHE: "true"
       NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ALLOW_EXTERNAL_CALLS: "true"
     volumes:
       - ./common_lib:/app/common_lib
       - ./mapping_collector:/app/mapping_collector
@@ -94,6 +97,8 @@ services:
       NT_ENABLE_CACHE: "true"
       NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ALLOW_EXTERNAL_CALLS: "${NT_ALLOW_EXTERNAL_CALLS:-true}"
+      NVD_API_KEY: "${NVD_API_KEY}"
     volumes:
       - ./common_lib:/app/common_lib
       - ./cvss_fetcher:/app/cvss_fetcher
@@ -121,6 +126,7 @@ services:
       NT_ENABLE_CACHE: "true"
       NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
+      NT_ALLOW_EXTERNAL_CALLS: "${NT_ALLOW_EXTERNAL_CALLS:-true}"
     volumes:
       - ./common_lib:/app/common_lib
       - ./epss_fetcher:/app/epss_fetcher
@@ -206,6 +212,8 @@ services:
       NT_ENABLE_DATABASE: "true"
       NT_ENABLE_CACHE: "true"
       NT_CACHE_TTL_SECONDS: "${NT_CACHE_TTL_SECONDS:-3600}"
+      NT_QUERY_API_KEYS: "${NT_QUERY_API_KEYS:-dev-api-key-123,admin-key-456}"
+      NT_ENVIRONMENT: "${NT_ENVIRONMENT:-development}"
       NT_LOG_LEVEL: "${NT_LOG_LEVEL:-INFO}"
     volumes:
       - ./common_lib:/app/common_lib
@@ -230,7 +238,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      VITE_QUERY_API_BASE_URL: http://localhost:8004/api/v1
+      VITE_QUERY_API_KEY: "${VITE_QUERY_API_KEY:-dev-api-key-123}"
     volumes:
       - ./web_frontend:/app
       - /app/node_modules

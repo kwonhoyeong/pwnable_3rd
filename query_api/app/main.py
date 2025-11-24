@@ -7,21 +7,45 @@ import uuid
 from typing import Any
 
 from fastapi import Depends, FastAPI, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from common_lib.config import get_settings
 from common_lib.db import get_session
 from common_lib.errors import AppException, ExternalServiceError
 from common_lib.logger import get_logger
 from common_lib.observability import request_id_ctx
 
+from .auth import verify_api_key
 from .models import QueryResponse
 from .repository import QueryRepository
 from .service import QueryService
 
 logger = get_logger(__name__)
 debug_logger = logging.getLogger(__name__)
+
+# Setup Rate Limiter
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="QueryAPI")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+# Add CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 service = QueryService()
 
 
@@ -86,6 +110,8 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
         exc_info=exc,
         extra={"path": request.url.path, "method": request.method},
     )
+    print(f"DEBUG: Unexpected error: {exc}")
+    traceback.print_exc()
 
     # Log full traceback for debugging
     error_traceback = traceback.format_exc()
@@ -103,15 +129,30 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
 
 
 @app.get("/api/v1/query", response_model=QueryResponse, tags=["query"])
+@limiter.limit("5/minute")
 async def query(
+    request: Request,
     package: str | None = Query(default=None),
     cve_id: str | None = Query(default=None),
+    version: str | None = Query(default=None, description="Package version (optional, defaults to 'latest' for analysis)"),
+    api_key: str = Depends(verify_api_key),
     session=Depends(get_session),
 ) -> QueryResponse:
-    """패키지 또는 CVE 기반 조회 실행(Execute query by package or CVE)."""
+    print(f"DEBUG: /query called with package={package}, cve_id={cve_id}")
+    """패키지 또는 CVE 기반 조회 실행(Execute query by package or CVE).
+
+    Query Parameters:
+        package: NPM package name (e.g., "react", "lodash")
+        cve_id: CVE identifier (e.g., "CVE-2024-1234")
+        version: Optional package version (e.g., "1.0.0", "2.3.5")
+                If not provided, returns all CVEs for the package or triggers analysis with 'latest'
+
+    Requires valid API key in X-API-Key header
+    """
 
     # --- DEBUG LOG ---
-    debug_logger.info(f"DEBUG [/query]: session type: {type(session)}, session repr: {repr(session)}")
+    if get_settings().environment == "development":
+        debug_logger.info(f"DEBUG [/query]: session type: {type(session)}, session repr: {repr(session)}")
     # -----------------
 
     if session is None:
@@ -122,20 +163,27 @@ async def query(
 
     repository = QueryRepository(session)
     # Exceptions will be handled by global exception handlers
-    response = await service.query(repository, package, cve_id)
+    response = await service.query(repository, package, cve_id, version)
     return response
 
 
 @app.get("/api/v1/history", tags=["history"])
+@limiter.limit("10/minute")
 async def get_history(
+    request: Request,
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(10, ge=1, le=100, description="Number of records to fetch"),
+    api_key: str = Depends(verify_api_key),
     session=Depends(get_session),
 ) -> dict[str, object]:
-    """분석 히스토리 조회(Fetch analysis history with pagination)."""
+    """분석 히스토리 조회(Fetch analysis history with pagination).
+
+    Requires valid API key in X-API-Key header
+    """
 
     # --- DEBUG LOG ---
-    debug_logger.info(f"DEBUG: session type: {type(session)}, session repr: {repr(session)}")
+    if get_settings().environment == "development":
+        debug_logger.info(f"DEBUG: session type: {type(session)}, session repr: {repr(session)}")
     # -----------------
 
     if session is None:
@@ -156,11 +204,20 @@ async def get_history(
 
 
 @app.get("/api/v1/stats", tags=["stats"])
-async def get_stats(session=Depends(get_session)) -> dict[str, object]:
-    """위험도 통계 조회(Get risk distribution statistics)."""
+@limiter.limit("5/minute")
+async def get_stats(
+    request: Request,
+    api_key: str = Depends(verify_api_key),
+    session=Depends(get_session),
+) -> dict[str, object]:
+    """위험도 통계 조회(Get risk distribution statistics).
+
+    Requires valid API key in X-API-Key header
+    """
 
     # --- DEBUG LOG ---
-    debug_logger.info(f"DEBUG [/stats]: session type: {type(session)}, session repr: {repr(session)}")
+    if get_settings().environment == "development":
+        debug_logger.info(f"DEBUG [/stats]: session type: {type(session)}, session repr: {repr(session)}")
     # -----------------
 
     if session is None:

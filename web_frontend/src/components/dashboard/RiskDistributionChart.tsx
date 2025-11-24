@@ -19,16 +19,16 @@ export const RiskDistributionChart: React.FC<RiskDistributionChartProps> = ({
 }) => {
   const chartData = data
     ? [
-        { name: 'Critical', value: data.CRITICAL, fill: '#dc2626' },
-        { name: 'High', value: data.HIGH, fill: '#f97316' },
-        { name: 'Medium', value: data.MEDIUM, fill: '#3b82f6' },
-        { name: 'Low', value: data.LOW, fill: '#16a34a' },
-        { name: 'Unknown', value: data.Unknown, fill: '#6b7280' },
-      ]
+      { name: 'Critical', value: data.CRITICAL, fill: '#dc2626' },
+      { name: 'High', value: data.HIGH, fill: '#f97316' },
+      { name: 'Medium', value: data.MEDIUM, fill: '#3b82f6' },
+      { name: 'Low', value: data.LOW, fill: '#16a34a' },
+      { name: 'Unknown', value: data.Unknown, fill: '#6b7280' },
+    ]
     : [];
 
   return (
-    <Card title="Risk Distribution" className="h-96">
+    <Card title="위험도 분포" className="h-96">
       {isLoading ? (
         <div className="h-80 bg-slate-100 dark:bg-slate-800 rounded animate-pulse"></div>
       ) : chartData.length === 0 ? (

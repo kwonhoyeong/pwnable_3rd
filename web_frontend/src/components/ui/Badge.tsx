@@ -8,16 +8,29 @@ interface BadgeProps {
 }
 
 export const Badge: React.FC<BadgeProps> = ({ children, variant = 'default', className }) => {
+  // Using CSS classes defined in index.css
   const variantClasses = {
-    critical: 'bg-red-50 text-red-700 border border-red-200',
-    high: 'bg-orange-50 text-orange-700 border border-orange-200',
-    medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-    low: 'bg-green-50 text-green-700 border border-green-200',
-    default: 'bg-slate-50 text-slate-700 border border-slate-200',
+    critical: 'badge-critical',
+    high: 'badge-high',
+    medium: 'badge-medium',
+    low: 'badge-low',
+    default: clsx(
+      'px-3 py-1 rounded-full text-xs font-semibold',
+      'border'
+    ),
   };
 
+  const defaultStyle = variant === 'default' ? {
+    backgroundColor: 'var(--color-bg-tertiary)',
+    color: 'var(--color-text-secondary)',
+    borderColor: 'var(--color-border)',
+  } : undefined;
+
   return (
-    <span className={clsx('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium', variantClasses[variant], className)}>
+    <span
+      className={clsx('inline-flex items-center', variantClasses[variant], className)}
+      style={defaultStyle}
+    >
       {children}
     </span>
   );

@@ -174,25 +174,29 @@ class ThreatSearchService:
     async def search_cases(self, payload: ThreatInput) -> List[ThreatCase]:
         """Perplexity 검색 결과에서 사례 추출(Extract cases from Perplexity results)."""
 
-        prompt = SEARCH_PROMPT_TEMPLATE.format(
-            package=payload.package,
-            version_range=payload.version_range,
-            cve_id=payload.cve_id,
-        )
-        raw_answer = await self._client.chat(prompt)
-        logger.debug("Perplexity raw answer: %s", raw_answer)
+        try:
+            prompt = SEARCH_PROMPT_TEMPLATE.format(
+                package=payload.package,
+                version_range=payload.version_range,
+                cve_id=payload.cve_id,
+            )
+            raw_answer = await self._client.chat(prompt)
+            logger.debug("Perplexity raw answer: %s", raw_answer)
 
-        # Parse the actual threat data from the response
-        threat_case = _parse_threat_case(raw_answer, payload.cve_id)
+            # Parse the actual threat data from the response
+            threat_case = _parse_threat_case(raw_answer, payload.cve_id)
 
-        logger.info(
-            "Extracted threat case for %s: title=%s, severity=%s",
-            payload.cve_id,
-            threat_case.title[:50],
-            "N/A",  # Note: severity is computed but not stored in ThreatCase model
-        )
+            logger.info(
+                "Extracted threat case for %s: title=%s, severity=%s",
+                payload.cve_id,
+                threat_case.title[:50],
+                "N/A",  # Note: severity is computed but not stored in ThreatCase model
+            )
 
-        return [threat_case]
+            return [threat_case]
+        except Exception as exc:
+            logger.warning("Failed to search threat cases for %s: %s", payload.cve_id, exc)
+            return []
 
 
 class ThreatSummaryService:
@@ -231,7 +235,12 @@ class ThreatAggregationService:
             logger.warning("No threat cases found for %s", payload.cve_id)
             return ThreatResponse(cve_id=payload.cve_id, package=payload.package, version_range=payload.version_range, cases=[])
 
-        summary = await self._summary.summarize(payload, sanitized_cases)
+        try:
+            summary = await self._summary.summarize(payload, sanitized_cases)
+        except Exception as exc:
+            logger.warning("Failed to generate summary for %s: %s", payload.cve_id, exc)
+            summary = "AI 요약 생성 실패 (원문 참고)"
+
         enriched_cases: List[ThreatCase] = []
         for case in sanitized_cases:
             merged_summary = _sanitize_text(

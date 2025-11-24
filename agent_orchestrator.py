@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional
 
@@ -21,7 +22,7 @@ from analyzer.app.service import AnalyzerService
 from common_lib.cache import AsyncCache
 from common_lib.db import get_session
 from common_lib.logger import get_logger
-from common_lib.retry_config import _is_retryable_exception
+from common_lib.retry_config import _is_retryable_exception, get_retry_strategy
 from cvss_fetcher.app.repository import CVSSRepository
 from cvss_fetcher.app.service import CVSSService
 from epss_fetcher.app.repository import EPSSRepository
@@ -38,6 +39,13 @@ print("🚀 [DEBUG] Orchestrator script loaded", flush=True)
 ProgressCallback = Callable[[str, str], None]
 
 logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def get_session_ctx():
+    """Wrapper to use get_session generator as a context manager."""
+    async for session in get_session():
+        yield session
 
 
 async def _safe_call(
@@ -61,12 +69,7 @@ async def _safe_call(
         Result from coroutine or fallback function
     """
     # Create a retrying strategy with exponential backoff
-    retry_strategy = AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=4),
-        retry=retry_if_exception(_is_retryable_exception),
-        reraise=True,
-    )
+    retry_strategy = AsyncRetrying(**get_retry_strategy())
 
     try:
         # Use AsyncRetrying to wrap the coroutine
@@ -228,7 +231,7 @@ class AgentOrchestrator:
         )
 
         pipeline_results: List[Dict[str, Any]] = []
-        async with get_session() as session:
+        async with get_session_ctx() as session:
             # Initialize repositories only if session is available
             mapping_repo = MappingRepository(session) if session else None
             epss_repo = EPSSRepository(session) if session else None

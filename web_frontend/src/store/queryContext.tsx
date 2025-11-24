@@ -8,8 +8,8 @@ export interface CVEDetail {
   risk_level: string;
   analysis_summary: string;
   recommendations: string[];
-  priority_score: number;
-  priority_label: string;
+  risk_score: number;
+  risk_label: string;
 }
 
 export interface QueryState {
@@ -35,7 +35,7 @@ export const QueryProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const baseUrl = import.meta.env.VITE_QUERY_API_BASE_URL || '/api/v1';
       const response = await axios.get(`${baseUrl}/query`, { params: { package: pkg, cve_id } });
       const ordered = (response.data.cve_list || []).slice().sort(
-        (a: CVEDetail, b: CVEDetail) => b.priority_score - a.priority_score,
+        (a: CVEDetail, b: CVEDetail) => b.risk_score - a.risk_score,
       );
       setState({
         loading: false,
