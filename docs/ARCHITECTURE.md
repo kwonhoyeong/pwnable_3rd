@@ -111,7 +111,3 @@ SQLite 초기화 스크립트(`database/init-db.sqlite.sql`)와 PostgreSQL 스�
    - 환경 변수, 회귀 테스트(`tests/test_regression.py`), 운영 체크리스트를 최신 코드와 맞춰 정리해 팀 온보딩 시간을 단축.
 
 **Impact**: 캐시 히트율과 안정성이 향상되고, JSONB 직렬화/세션 핸들링 이슈가 제거되었으며, UI와 API 간 스키마 정렬로 사용자 경험이 개선되었습니다.
-
----
-
-이 문서는 팀원과 협력사에게 시스템 구조를 설명할 때 기준 자료로 사용할 수 있습니다. 세부 API/설정/운영 절차는 `README.md`, `docs/API.md`, `docs/DOCKER.md`, `docs/REVIEW.md`, `SETUP.md`를 참고하세요.
