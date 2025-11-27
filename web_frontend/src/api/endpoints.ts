@@ -67,7 +67,7 @@ export interface RiskDistribution {
   HIGH: number;
   MEDIUM: number;
   LOW: number;
-  Unknown: number;
+  UNKNOWN: number;
 }
 
 /**
@@ -125,14 +125,14 @@ export const queryAPI = {
 
   /**
    * Generic query endpoint - supports both package and CVE ID search
-   * GET /api/v1/query?package={packageName}&version={version}&cve_id={cveId}
+   * GET /api/v1/query?package={packageName}&version={version}&cve_id={cveId}&ecosystem={ecosystem}
    *
-   * @param params - Query parameters { package?: string; version?: string; cve_id?: string }
+   * @param params - Query parameters { package?: string; version?: string; cve_id?: string; ecosystem?: string }
    * @returns Promise<QueryResponse> containing array of CVEDetail objects
    *
    * Note: For package searches, version parameter is optional (defaults to "latest" on backend)
    */
-  query: (params: { package?: string; version?: string; cve_id?: string }): Promise<AxiosResponse<QueryResponse>> =>
+  query: (params: { package?: string; version?: string; cve_id?: string; ecosystem?: string }): Promise<AxiosResponse<QueryResponse>> =>
     client.get<QueryResponse>('/api/v1/query', { params }),
 
   /**

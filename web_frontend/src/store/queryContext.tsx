@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import axios from 'axios';
+import apiClient from '../api/client';
 
 export interface CVEDetail {
   cve_id: string;
@@ -33,7 +33,7 @@ export const QueryProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const baseUrl = import.meta.env.VITE_QUERY_API_BASE_URL || '/api/v1';
-      const response = await axios.get(`${baseUrl}/query`, { params: { package: pkg, cve_id } });
+      const response = await apiClient.get(`${baseUrl}/query`, { params: { package: pkg, cve_id } });
       const ordered = (response.data.cve_list || []).slice().sort(
         (a: CVEDetail, b: CVEDetail) => b.risk_score - a.risk_score,
       );

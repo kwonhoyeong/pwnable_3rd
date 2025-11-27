@@ -38,55 +38,73 @@ class GPT5Client(IAIClient):
     async def chat(self, prompt: str, **kwargs: Any) -> str:
         """GPT-5 채팅 호출(Invoke GPT-5 chat)."""
 
-        # Check API key before making request
+        # Extract parameters from kwargs
+        model = kwargs.pop("model", self._default_model)
+        temperature = kwargs.pop("temperature", 0.7)
+        max_tokens = kwargs.pop("max_tokens", 4096)
+        system_prompt = kwargs.pop("system", None)
+
+        # Build messages array - OpenAI requires system message in messages, not as separate parameter
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_completion_tokens": max_tokens,  # Changed from max_tokens to max_completion_tokens
+        }
+
+        # Check API key and raise error to trigger fallback mechanism
         if not self._allow_external:
-            logger.info("GPT-5 external calls disabled; using fallback responses.")
             raise RuntimeError("GPT-5 API disabled by configuration")
 
         if not self._api_key or self._api_key.strip() == "":
-            logger.warning(
-                "NT_GPT5_API_KEY is missing or empty; skipping GPT-5 API call and using fallback analysis."
-            )
-            raise RuntimeError("NT_GPT5_API_KEY is not configured")
+            raise RuntimeError("GPT-5 API key is not configured")
 
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
 
-        payload: Dict[str, Any] = {
-            "model": kwargs.pop("model", self._default_model),
-            "messages": kwargs.pop(
-                "messages",
-                [
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
-            ),
-        }
-        payload.update(kwargs)
-
-        logger.debug(
-            "Making GPT-5 API request to %s/chat/completions",
-            self._base_url
-        )
-
         try:
             async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
-                request = client.post(
-                    f"{self._base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
+                logger.debug("Sending GPT-5 API request to %s with model %s", self._base_url, model)
+                response = await client.post(
+                    f"{self._base_url}/chat/completions", headers=headers, json=payload
                 )
-                response = await asyncio.wait_for(request, timeout=self._timeout)
+
+                # Log response status for debugging
+                logger.debug("GPT-5 API response status: %s", response.status_code)
+
+                if response.status_code != 200:
+                    error_body = response.text
+                    logger.error(
+                        "GPT-5 API HTTP error: status=%s, endpoint=%s, error_body=%s",
+                        response.status_code,
+                        f"{self._base_url}/chat/completions",
+                        error_body,
+                    )
+
+                    if response.status_code == 400:
+                        logger.error(
+                            "GPT-5 API bad request (400). The request payload may be invalid or the API key may be incorrect."
+                        )
+                    elif response.status_code == 401:
+                        logger.error("GPT-5 API unauthorized (401). Check your API key.")
+                    elif response.status_code == 429:
+                        logger.warning("GPT-5 API rate limit exceeded (429). Retrying may help.")
+
                 response.raise_for_status()
                 data = response.json()
-            choices = data.get("choices", [])
-            if choices:
+
+            # Extract content from GPT response
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if content:
                 logger.info("GPT-5 API call succeeded")
-                return choices[0].get("message", {}).get("content", "")
+                return content
             logger.warning("GPT-5 API returned empty choices")
             return ""
         except asyncio.TimeoutError as exc:

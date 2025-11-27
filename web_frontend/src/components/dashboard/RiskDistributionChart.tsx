@@ -8,7 +8,7 @@ interface RiskDistributionChartProps {
     HIGH: number;
     MEDIUM: number;
     LOW: number;
-    Unknown: number;
+    UNKNOWN: number;
   };
   isLoading?: boolean;
 }
@@ -23,7 +23,7 @@ export const RiskDistributionChart: React.FC<RiskDistributionChartProps> = ({
       { name: 'High', value: data.HIGH, fill: '#f97316' },
       { name: 'Medium', value: data.MEDIUM, fill: '#3b82f6' },
       { name: 'Low', value: data.LOW, fill: '#16a34a' },
-      { name: 'Unknown', value: data.Unknown, fill: '#6b7280' },
+      { name: 'Unknown', value: data.UNKNOWN, fill: '#6b7280' },
     ]
     : [];
 

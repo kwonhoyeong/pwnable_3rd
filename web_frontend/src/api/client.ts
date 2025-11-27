@@ -35,7 +35,13 @@ client.interceptors.request.use((config) => {
   config.headers['X-Request-ID'] = requestId;
 
   // Add API Key for authentication
-  const apiKey = import.meta.env.VITE_QUERY_API_KEY || 'dev-api-key-123';
+  const apiKey = import.meta.env.VITE_QUERY_API_KEY;
+
+  if (!apiKey) {
+    console.error('CRITICAL: VITE_QUERY_API_KEY environment variable is not set. API requests will fail.');
+    throw new Error('API Key configuration missing. Please set VITE_QUERY_API_KEY environment variable.');
+  }
+
   config.headers['X-API-Key'] = apiKey;
 
   return config;

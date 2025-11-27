@@ -18,18 +18,19 @@ class QueryRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find_by_package(self, package: str, version: str | None = None) -> List[dict[str, object]]:
+    async def find_by_package(self, package: str, ecosystem: str = "npm", version: str | None = None) -> List[dict[str, object]]:
         """패키지로 조회(Look up by package).
 
         Args:
             package: Package name to search for
+            ecosystem: Package ecosystem (npm, pip, apt)
             version: Optional package version. If provided, filters CVEs by version_range.
                     If None, returns all CVEs for the package.
         """
 
-        # Build WHERE clause conditionally based on version parameter
-        where_clause = "WHERE package = :package"
-        params: dict[str, object] = {"package": package}
+        # Build WHERE clause with ecosystem filtering
+        where_clause = "WHERE package = :package AND ecosystem = :ecosystem"
+        params: dict[str, object] = {"package": package, "ecosystem": ecosystem}
 
         if version:
             where_clause += " AND version_range = :version"
@@ -162,7 +163,7 @@ class QueryRepository:
             {
                 "cve_id": row.cve_id,
                 "risk_level": row.risk_level,
-                "risk_score": row.risk_score if hasattr(row, "risk_score") and row.risk_score is not None else None,
+                "risk_score": float(row.risk_score) if hasattr(row, "risk_score") and row.risk_score is not None else None,
                 "analysis_summary": row.analysis_summary or "",
                 "recommendations": row.recommendations or [],
                 "generated_at": row.generated_at.isoformat() if row.generated_at else None,
@@ -186,18 +187,84 @@ class QueryRepository:
         result = await self._session.execute(query)
         rows = result.fetchall()
 
-        # Initialize with all possible risk levels
+        # Initialize with all possible risk levels (UPPERCASE to match normalization)
         stats = {
             "CRITICAL": 0,
             "HIGH": 0,
             "MEDIUM": 0,
             "LOW": 0,
-            "Unknown": 0,
+            "UNKNOWN": 0,  # Changed from "Unknown" to "UNKNOWN"
         }
 
         # Update with actual data
-        for row in rows:
-            risk_level = (row.risk_level or "Unknown").upper()
-            stats[risk_level] = row.count
+        try:
+            for row in rows:
+                # Normalize to uppercase for consistent key lookup
+                risk_level = (row.risk_level or "UNKNOWN").upper()
+                
+                # Fallback: if unexpected severity, map to UNKNOWN instead of crashing
+                if risk_level not in stats:
+                    logger.warning("Unexpected risk_level '%s' found, mapping to UNKNOWN", risk_level)
+                    risk_level = "UNKNOWN"
+                
+                stats[risk_level] = row.count
+        except Exception as exc:
+            logger.error("Error aggregating risk stats: %s", exc, exc_info=True)
+            # Return initialized stats on error instead of crashing
 
         return stats
+
+    async def delete_by_package(self, package: str, ecosystem: str = "npm", version: str | None = None) -> None:
+        """패키지 데이터 삭제(Delete package data).
+        
+        Args:
+            package: Package name to delete
+            ecosystem: Package ecosystem (npm, pip, apt)
+            version: Optional package version. If provided, only deletes this specific version.
+                    If None, deletes all versions of the package.
+        """
+        try:
+            # Build WHERE clause with optional version filtering
+            where_clause = "WHERE package = :package AND ecosystem = :ecosystem"
+            params: dict[str, object] = {"package": package, "ecosystem": ecosystem}
+            
+            if version:
+                where_clause += " AND version_range = :version"
+                params["version"] = version
+            
+            query = text(f"DELETE FROM package_cve_mapping {where_clause}")
+            await self._session.execute(query, params)
+            await self._session.commit()
+            
+            if version:
+                logger.info("Deleted package data for %s@%s (ecosystem=%s)", package, version, ecosystem)
+            else:
+                logger.info("Deleted all versions of package %s (ecosystem=%s)", package, ecosystem)
+        except Exception as exc:
+            logger.error("Database error in delete_by_package: %s", exc, exc_info=exc)
+            raise ExternalServiceError(
+                service_name="Database",
+                reason="Failed to delete package data",
+                details={"package": package, "version": version},
+            ) from exc
+
+    async def delete_by_cve(self, cve_id: str) -> None:
+        """CVE 분석 결과 삭제(Delete CVE analysis results)."""
+        try:
+            # Delete from analysis_results, epss_scores, and cvss_scores
+            queries = [
+                text("DELETE FROM analysis_results WHERE cve_id = :cve_id"),
+                text("DELETE FROM epss_scores WHERE cve_id = :cve_id"),
+                text("DELETE FROM cvss_scores WHERE cve_id = :cve_id"),
+            ]
+            for query in queries:
+                await self._session.execute(query, {"cve_id": cve_id})
+            await self._session.commit()
+            logger.info("Deleted existing analysis data for CVE %s", cve_id)
+        except Exception as exc:
+            logger.error("Database error in delete_by_cve: %s", exc, exc_info=exc)
+            raise ExternalServiceError(
+                service_name="Database",
+                reason="Failed to delete CVE data",
+                details={"cve_id": cve_id},
+            ) from exc

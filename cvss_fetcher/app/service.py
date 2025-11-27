@@ -40,12 +40,14 @@ class CVSSService:
         cve_id: str,
         score: Optional[float] = None,
         vector: Optional[str] = None,
+        description: Optional[str] = None,
         source: Optional[str] = None,
     ) -> Dict[str, Any]:
         return {
             "cve_id": cve_id,
             "cvss_score": score,
             "vector": vector,
+            "description": description,
             "source": source,
             "collected_at": datetime.utcnow(),
         }
@@ -104,7 +106,7 @@ class CVSSService:
         return self._build_response(cve_id, source="not_found_perplexity")
 
     async def fetch_score(self, cve_id: str) -> Dict[str, Any]:
-        """NVD API를 통해 CVSS 점수를 조회(Fetch CVSS score from NVD API)."""
+        """NVD API를 통해 CVSS 점수를 조회하고, 실패 시 Perplexity로 폴백(Fetch CVSS score from NVD API with Perplexity fallback)."""
 
         if not self._allow_external:
             logger.info("외부 CVSS 조회 비활성화됨(External CVSS lookups disabled); returning fallback score.")
@@ -118,104 +120,139 @@ class CVSSService:
         headers = {}
         if self._nvd_api_key:
             headers["apiKey"] = self._nvd_api_key
+            logger.debug("Using NVD API key for request")
 
         params = {"cveId": cve_id}
 
         for attempt in range(1, self._max_retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    logger.info("Attempting NVD API request for %s (attempt %d/%d)", cve_id, attempt, self._max_retries)
                     response = await client.get(
                         self.NVD_API_URL,
                         headers=headers,
                         params=params,
                     )
                     
+                    # Handle 404 - CVE not found in NVD
                     if response.status_code == 404:
-                        logger.info("CVE not found in NVD: %s, trying fallback", cve_id)
+                        logger.warning("NVD fetch failed for %s: CVE not found (404), falling back to Perplexity", cve_id)
                         return await self._fetch_from_perplexity(cve_id)
                     
+                    # Handle authentication errors
                     if response.status_code == 403:
-                        logger.warning("NVD API 인증 실패 - API 키 확인 필요 (Authentication failed - check API key)")
-                        return self._build_response(cve_id)
+                        logger.warning("NVD API authentication failed (403) - check API key")
+                        if attempt == self._max_retries:
+                            logger.warning("NVD fetch failed for %s after %d attempts, falling back to Perplexity", cve_id, self._max_retries)
+                            return await self._fetch_from_perplexity(cve_id)
+                        continue
                     
+                    # Raise for other HTTP errors
                     response.raise_for_status()
                     data = response.json()
 
-                    # NVD 응답에서 CVSS 데이터 추출
+                    # Parse NVD response for CVSS data
                     if "vulnerabilities" in data and len(data["vulnerabilities"]) > 0:
                         vuln = data["vulnerabilities"][0]
                         cve_data = vuln.get("cve", {})
                         
-                        # CVSS v3.1 또는 v3.0 우선 사용
+                        # Extract CVSS metrics (priority: v3.1 > v3.0 > v2)
                         metrics = cve_data.get("metrics", {})
                         cvss_score = None
                         vector = None
+                        cvss_version = None
                         
-                        # CVSS v3.1
+                        # Try CVSS v3.1 first
                         if "cvssMetricV31" in metrics and len(metrics["cvssMetricV31"]) > 0:
                             cvss_data = metrics["cvssMetricV31"][0]["cvssData"]
                             cvss_score = cvss_data.get("baseScore")
                             vector = cvss_data.get("vectorString")
-                        # CVSS v3.0
+                            cvss_version = "3.1"
+                        # Fall back to CVSS v3.0
                         elif "cvssMetricV30" in metrics and len(metrics["cvssMetricV30"]) > 0:
                             cvss_data = metrics["cvssMetricV30"][0]["cvssData"]
                             cvss_score = cvss_data.get("baseScore")
                             vector = cvss_data.get("vectorString")
-                        # CVSS v2 (fallback)
+                            cvss_version = "3.0"
+                        # Last resort: CVSS v2
                         elif "cvssMetricV2" in metrics and len(metrics["cvssMetricV2"]) > 0:
                             cvss_data = metrics["cvssMetricV2"][0]["cvssData"]
                             cvss_score = cvss_data.get("baseScore")
                             vector = cvss_data.get("vectorString")
+                            cvss_version = "2.0"
+
+                        # Extract Description (English)
+                        description = None
+                        if "descriptions" in cve_data:
+                            for desc in cve_data["descriptions"]:
+                                if desc.get("lang") == "en":
+                                    description = desc.get("value")
+                                    break
 
                         if cvss_score is not None:
                             logger.info(
-                                "NVD에서 CVSS 점수 수집 성공 (Successfully fetched CVSS from NVD): %s = %.1f (attempt %d)",
+                                "Successfully fetched CVSS from NVD: %s = %.1f (version %s, attempt %d)",
                                 cve_id,
                                 cvss_score,
+                                cvss_version,
                                 attempt,
                             )
-                            # Rate limiting: 0.1초 대기 (Wait 0.1s to avoid rate limits)
-                            await asyncio.sleep(0.1)
                             return {
                                 "cve_id": cve_id,
                                 "cvss_score": float(cvss_score),
                                 "vector": vector,
+                                "description": description,
                                 "source": "NVD",
                                 "collected_at": datetime.utcnow(),
                             }
                         else:
-                            logger.warning("NVD 응답에 CVSS 데이터 없음 (No CVSS data in NVD response): %s, trying fallback", cve_id)
-                            return await self._fetch_from_perplexity(cve_id)
+                            logger.warning("NVD response contains no CVSS data for %s", cve_id)
+                            if attempt == self._max_retries:
+                                logger.warning("NVD fetch failed for %s, falling back to Perplexity", cve_id)
+                                return await self._fetch_from_perplexity(cve_id)
 
-                    logger.warning("NVD 응답에 취약점 데이터 없음 (No vulnerability data in NVD response): %s, trying fallback", cve_id)
-                    return await self._fetch_from_perplexity(cve_id)
+                    else:
+                        logger.warning("NVD response contains no vulnerability data for %s", cve_id)
+                        if attempt == self._max_retries:
+                            logger.warning("NVD fetch failed for %s, falling back to Perplexity", cve_id)
+                            return await self._fetch_from_perplexity(cve_id)
 
             except httpx.TimeoutException:
                 logger.warning(
-                    "NVD API 타임아웃 (NVD API timeout for %s, attempt %d)",
+                    "NVD API timeout for %s (attempt %d/%d)",
                     cve_id,
                     attempt,
+                    self._max_retries,
                 )
                 if attempt == self._max_retries:
-                    return self._build_response(cve_id)
+                    logger.warning("NVD fetch failed for %s after timeout, falling back to Perplexity", cve_id)
+                    return await self._fetch_from_perplexity(cve_id)
+                    
             except httpx.HTTPError as exc:
                 logger.error(
-                    "NVD API HTTP 오류 (HTTP error for %s, attempt %d): %s",
+                    "NVD API HTTP error for %s (attempt %d/%d): %s",
                     cve_id,
                     attempt,
+                    self._max_retries,
                     exc,
                 )
                 if attempt == self._max_retries:
-                    return self._build_response(cve_id)
+                    logger.warning("NVD fetch failed for %s, falling back to Perplexity", cve_id)
+                    return await self._fetch_from_perplexity(cve_id)
+                    
             except Exception as exc:
                 logger.error(
-                    "예상치 못한 오류 (Unexpected error for %s, attempt %d): %s",
+                    "Unexpected error fetching from NVD for %s (attempt %d/%d): %s",
                     cve_id,
                     attempt,
+                    self._max_retries,
                     exc,
                     exc_info=True,
                 )
                 if attempt == self._max_retries:
-                    return self._build_response(cve_id)
+                    logger.warning("NVD fetch failed for %s, falling back to Perplexity", cve_id)
+                    return await self._fetch_from_perplexity(cve_id)
 
-        return self._build_response(cve_id)
+        # Final fallback if all retries exhausted
+        logger.warning("All NVD attempts exhausted for %s, falling back to Perplexity", cve_id)
+        return await self._fetch_from_perplexity(cve_id)

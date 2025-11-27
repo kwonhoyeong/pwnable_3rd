@@ -23,7 +23,7 @@ class ClaudeClient(IAIClient):
         self._api_key = settings.claude_api_key
         self._timeout = timeout
         self._allow_external = settings.allow_external_calls
-        self._default_model = os.getenv("NT_CLAUDE_MODEL", "claude-sonnet-4-5")
+        self._default_model = os.getenv("NT_CLAUDE_MODEL", "claude-haiku-4-5")
         self._default_max_tokens = 4096
         # Initialize Anthropic client (API key loaded from ANTHROPIC_API_KEY env var automatically)
         self._client = Anthropic(api_key=self._api_key) if self._api_key else Anthropic()
@@ -49,6 +49,7 @@ class ClaudeClient(IAIClient):
             # Extract parameters from kwargs, with defaults
             model = kwargs.pop("model", self._default_model)
             max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
+            temperature = kwargs.pop("temperature", 0.3)  # Low temperature for factual, deterministic responses
             messages = kwargs.pop(
                 "messages",
                 [
@@ -64,6 +65,7 @@ class ClaudeClient(IAIClient):
                 self._client.messages.create,
                 model=model,
                 max_tokens=max_tokens,
+                temperature=temperature,
                 messages=messages,
                 **kwargs
             )

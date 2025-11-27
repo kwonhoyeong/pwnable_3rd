@@ -144,6 +144,7 @@ def _fallback_analysis(payload: AnalyzerInput) -> AnalyzerOutput:
     return AnalyzerOutput(
         cve_id=payload.cve_id,
         risk_level="Medium",
+        risk_score=5.0,  # Default MEDIUM score
         recommendations=[
             "패키지를 최신 버전으로 업그레이드하세요(Upgrade package to latest).",
             "추가 모니터링을 수행하세요(Enable heightened monitoring).",
@@ -206,12 +207,13 @@ class AgentOrchestrator:
 
     async def orchestrate_pipeline(
         self,
-        package: str,
-        version_range: str,
+        package: Optional[str],
+        version_range: Optional[str],
         skip_threat_agent: bool,
         force: bool,
         progress_cb: ProgressCallback,
         ecosystem: str = "npm",
+        cve_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         progress_cb("INIT", "서비스 초기화 중(Initializing services)")
         if force:
@@ -224,8 +226,8 @@ class AgentOrchestrator:
         analyzer_service = AnalyzerService()
 
         package_payload = PackageInput(
-            package=package,
-            version_range=version_range,
+            package=package or "Generic",
+            version_range=version_range or "N/A",
             ecosystem=ecosystem,
             collected_at=datetime.utcnow(),
         )
@@ -239,11 +241,44 @@ class AgentOrchestrator:
             threat_repo = ThreatRepository(session) if session else None
             analysis_repo = AnalysisRepository(session) if session else None
 
-            cve_ids = await self._mapping_agent(
-                mapping_service, package_payload, force, progress_cb
-            )
-            if not cve_ids:
-                cve_ids = _fallback_cves(package_payload.package)
+            if cve_id and not package:
+                # CVE-only mode: Skip mapping, use provided CVE ID
+                progress_cb("MAPPING", f"CVE 단독 분석 모드: {cve_id} (Skipping mapping for CVE-only analysis)")
+                cve_ids = [cve_id]
+            else:
+                # Standard mode: Fetch CVEs for package
+                cve_ids = await self._mapping_agent(
+                    mapping_service, package_payload, force, progress_cb
+                )
+                if not cve_ids:
+                    cve_ids = _fallback_cves(package_payload.package)
+
+            # Filter CVEs by year (keep only last 5 years)
+            current_year = datetime.utcnow().year
+            cutoff_year = current_year - 5
+            
+            filtered_cves = []
+            for cve_id in cve_ids:
+                try:
+                    # Parse year from CVE ID (e.g., CVE-2023-1234)
+                    parts = cve_id.split('-')
+                    if len(parts) >= 2 and parts[1].isdigit():
+                        cve_year = int(parts[1])
+                        if cve_year >= cutoff_year:
+                            filtered_cves.append(cve_id)
+                        else:
+                            logger.debug("Skipping old CVE: %s (Year %d < %d)", cve_id, cve_year, cutoff_year)
+                    else:
+                        # Keep if format is unexpected to be safe
+                        filtered_cves.append(cve_id)
+                except Exception:
+                    filtered_cves.append(cve_id)
+            
+            if len(filtered_cves) < len(cve_ids):
+                logger.info("Filtered out %d old CVEs (older than %d)", len(cve_ids) - len(filtered_cves), cutoff_year)
+                cve_ids = filtered_cves
+
+            # We will now fetch scores for ALL CVEs first, then sort by risk, then limit to top 10 for deep analysis.
 
             # Only persist to DB if session is available
             if session and mapping_repo:
@@ -293,7 +328,32 @@ class AgentOrchestrator:
                     await session.rollback()
                     logger.warning("Failed to persist CVSS to DB: %s", exc)
 
+            # --- Risk-based Prioritization Step ---
+            # Calculate preliminary risk score to select top 10 for deep analysis
+            scored_cves = []
             for cve_id in cve_ids:
+                epss_val = epss_results.get(cve_id, {}).get("epss_score") or 0.0
+                cvss_val = cvss_results.get(cve_id, {}).get("cvss_score") or 0.0
+                
+                # Preliminary score formula: (CVSS * 0.6) + (EPSS * 10 * 0.4)
+                # Giving slightly more weight to CVSS for initial filtering as it's more stable
+                prelim_score = (cvss_val * 0.6) + (epss_val * 10 * 0.4)
+                scored_cves.append((cve_id, prelim_score))
+            
+            # Sort by score descending
+            scored_cves.sort(key=lambda x: x[1], reverse=True)
+            
+            # Select top 10
+            top_10_cves = [item[0] for item in scored_cves[:10]]
+            
+            if len(cve_ids) > 10:
+                logger.info(
+                    "Prioritized top 10 CVEs by risk score (out of %d). Top score: %.2f", 
+                    len(cve_ids), scored_cves[0][1] if scored_cves else 0.0
+                )
+
+            # Run deep analysis (Threat Agent + Analyzer) ONLY on top 10
+            for cve_id in top_10_cves:
                 threat_payload = ThreatInput(
                     cve_id=cve_id,
                     package=package_payload.package,
@@ -570,6 +630,7 @@ class AgentOrchestrator:
             cases=[case.dict() for case in threat_response.cases],
             package=threat_payload.package,
             version_range=threat_payload.version_range,
+            description=cvss_record.get("description"),
         )
 
         progress_cb("ANALYZE", f"{threat_payload.cve_id} 위험도 평가 중(Analyzing risk)")
@@ -675,4 +736,4 @@ if __name__ == "__main__":
         print(f"\n❌ Fatal Error: {e}")
         import traceback
 
-        traceback.print_exc()
+        traceback.print_exc

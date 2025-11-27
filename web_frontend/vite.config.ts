@@ -12,6 +12,7 @@ export default defineConfig({
         target: 'http://query-api:8004',
         changeOrigin: true,
         secure: false,
+        proxyTimeout: 120000, // 2 minutes
       },
     },
   },

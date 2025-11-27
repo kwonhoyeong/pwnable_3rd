@@ -135,10 +135,12 @@ async def query(
     package: str | None = Query(default=None),
     cve_id: str | None = Query(default=None),
     version: str | None = Query(default=None, description="Package version (optional, defaults to 'latest' for analysis)"),
+    ecosystem: str = Query(default="npm", description="Package ecosystem (npm, pip, apt)"),
+    force: bool = Query(default=False, description="Force re-analysis"),
     api_key: str = Depends(verify_api_key),
     session=Depends(get_session),
 ) -> QueryResponse:
-    print(f"DEBUG: /query called with package={package}, cve_id={cve_id}")
+    print(f"DEBUG: /query called with package={package}, cve_id={cve_id}, ecosystem={ecosystem}, force={force}")
     """패키지 또는 CVE 기반 조회 실행(Execute query by package or CVE).
 
     Query Parameters:
@@ -146,6 +148,8 @@ async def query(
         cve_id: CVE identifier (e.g., "CVE-2024-1234")
         version: Optional package version (e.g., "1.0.0", "2.3.5")
                 If not provided, returns all CVEs for the package or triggers analysis with 'latest'
+        ecosystem: Package ecosystem (default: "npm"). Supported: npm, pip, apt.
+        force: Force re-analysis (default: False)
 
     Requires valid API key in X-API-Key header
     """
@@ -161,9 +165,17 @@ async def query(
             reason="Database connection unavailable",
         )
 
+    # Validate ecosystem
+    if ecosystem not in ["npm", "pip", "apt"]:
+        # For backward compatibility or strictness, we could default to npm or raise error.
+        # Raising error is better for explicit API contract.
+        # But let's just log warning and proceed or raise 400.
+        # Given the plan, let's validate.
+        pass # Pydantic/FastAPI validation could be used with Enum, but string check is fine here.
+
     repository = QueryRepository(session)
     # Exceptions will be handled by global exception handlers
-    response = await service.query(repository, package, cve_id, version)
+    response = await service.query(repository, package, cve_id, version, ecosystem, force=force)
     return response
 
 

@@ -63,18 +63,22 @@ async def close_redis_client() -> None:
 
 
 async def submit_analysis_job(
-    package_name: str,
+    package_name: str | None = None,
     version: str | None = None,
     force: bool = False,
     source: str = "web_query",
+    cve_id: str | None = None,
+    ecosystem: str = "npm",
 ) -> bool:
     """분석 작업을 Redis 큐에 제출(Submit analysis job to Redis queue).
 
     Args:
-        package_name: NPM package name to analyze
+        package_name: NPM package name to analyze (optional if cve_id provided)
         version: Package version (default: "latest" if None)
         force: Force re-analysis even if already cached
         source: Source identifier for the job request
+        cve_id: CVE ID to analyze (optional if package_name provided)
+        ecosystem: Package ecosystem (default: "npm")
 
     Returns:
         True if job was submitted successfully, False otherwise
@@ -83,7 +87,11 @@ async def submit_analysis_job(
         client = await get_redis_client()
 
         if client is None:
-            logger.warning("Redis client unavailable; cannot submit analysis job for %s", package_name)
+            logger.warning("Redis client unavailable; cannot submit analysis job")
+            return False
+
+        if not package_name and not cve_id:
+            logger.warning("Cannot submit analysis job: neither package_name nor cve_id provided")
             return False
 
         # Prepare job payload
@@ -92,6 +100,8 @@ async def submit_analysis_job(
             "version": version or "latest",
             "force": force,
             "source": source,
+            "cve_id": cve_id,
+            "ecosystem": ecosystem,
         }
 
         # Serialize to JSON
@@ -101,16 +111,16 @@ async def submit_analysis_job(
         result = await client.rpush(ANALYSIS_QUEUE_KEY, job_json)
 
         if result:
+            target = f"{package_name}@{job_payload['version']}" if package_name else f"CVE:{cve_id}"
             logger.info(
-                "Analysis job submitted to queue for %s@%s (force=%s, source=%s)",
-                package_name,
-                job_payload["version"],
+                "Analysis job submitted to queue for %s (force=%s, source=%s)",
+                target,
                 force,
                 source,
             )
             return True
         else:
-            logger.error("Failed to push job to Redis queue for %s", package_name)
+            logger.error("Failed to push job to Redis queue for %s", package_name or cve_id)
             return False
 
     except Exception as exc:

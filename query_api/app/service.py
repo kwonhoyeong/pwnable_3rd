@@ -6,7 +6,7 @@ import json
 from typing import List, Optional
 
 from common_lib.cache import get_redis
-from common_lib.errors import AnalysisInProgressError, ResourceNotFound
+from common_lib.errors import AnalysisInProgressError, ExternalServiceError, InvalidInputError, ResourceNotFound
 from common_lib.logger import get_logger
 
 from .models import CVEDetail, QueryResponse
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 # Analysis trigger and wait configuration
 ANALYSIS_POLL_INTERVAL = 2.0  # seconds between polls
-ANALYSIS_MAX_WAIT_TIME = 30.0  # total seconds to wait for results
+ANALYSIS_MAX_WAIT_TIME = 120.0  # total seconds to wait for results
 
 
 class QueryService:
@@ -32,6 +32,8 @@ class QueryService:
         package: Optional[str],
         cve_id: Optional[str],
         version: Optional[str] = None,
+        ecosystem: str = "npm",
+        force: bool = False,
     ) -> QueryResponse:
         """패키지 또는 CVE 기준으로 조회(Query by package or CVE).
 
@@ -40,11 +42,12 @@ class QueryService:
             package: Package name to search for
             cve_id: CVE ID to search for
             version: Optional package version. If not provided, defaults to 'latest' for analysis jobs.
+            ecosystem: Package ecosystem (default: "npm")
 
         If data is not found, triggers analysis and polls for results.
         """
 
-        cache_key = self._build_cache_key(package, cve_id, version)
+        cache_key = self._build_cache_key(package, cve_id, version, ecosystem)
         redis = None
         try:
             redis = await get_redis()
@@ -52,77 +55,58 @@ class QueryService:
         except Exception as exc:  # pragma: no cover - cache fallback
             cached = None
             logger.warning("Redis unavailable, bypassing cache", exc_info=exc)
-        if cached:
+        if cached and not force:
             logger.debug("Cache hit for %s", cache_key)
             return QueryResponse(**json.loads(cached))
 
-        try:
-            if package:
-                raw_results = await repository.find_by_package(package, version)
-                results = self._prioritize(raw_results)
-                response = QueryResponse(
-                    package=package,
-                    cve_list=[CVEDetail(**item) for item in results],
-                )
-            elif cve_id:
-                raw_results = await repository.find_by_cve(cve_id)
-                results = self._prioritize(raw_results)
-                response = QueryResponse(
-                    cve_id=cve_id,
-                    cve_list=[CVEDetail(**item) for item in results],
-                )
-            else:
-                raise ValueError("Either package or cve_id must be provided")
 
-        except ResourceNotFound as exc:
-            # Data not found - trigger analysis and wait for results
+        # If force is True, skip database check and trigger re-analysis
+        if force:
             logger.info(
-                "Data not found for %s, triggering analysis job",
+                "Force flag set. Skipping cache/DB check and triggering re-analysis for %s (ecosystem=%s)",
                 package or cve_id,
+                ecosystem,
             )
-
+            
+            # Delete existing data first (only the specific version if provided)
+            if package:
+                await repository.delete_by_package(package, ecosystem, version)
+            elif cve_id:
+                await repository.delete_by_cve(cve_id)
+            
             # Submit analysis job to Redis
             if package:
                 success = await submit_analysis_job(
                     package_name=package,
-                    version=version or "latest",  # Use provided version or default to "latest"
-                    force=False,
+                    version=version or "latest",
+                    force=force,
                     source="web_query",
+                    ecosystem=ecosystem,
                 )
             else:
-                logger.info("Skipping analysis job creation for CVE-only search: %s", cve_id)
-                success = True # Treat as success to proceed to polling (though polling might fail if data missing)
+                success = await submit_analysis_job(
+                    cve_id=cve_id,
+                    force=force,
+                    source="web_query_cve_only",
+                    ecosystem=ecosystem,
+                )
 
             if not success:
-                logger.warning(
-                    "Failed to submit analysis job for %s, re-raising original error",
-                    package or cve_id,
+                logger.warning("Failed to submit analysis job for %s", package or cve_id)
+                raise ExternalServiceError(
+                    service_name="Redis",
+                    reason="Failed to submit analysis job",
                 )
-                raise
 
             # Poll database for results
-            logger.info(
-                "Polling database for analysis results for %s",
-                package or cve_id,
-            )
             results = await self._poll_for_analysis_results(
-                repository, package, cve_id, version
+                repository, package, cve_id, version, ecosystem
             )
 
             if results is not None:
-                # Found results after analysis
-                logger.info(
-                    "Analysis results found for %s after polling",
-                    package or cve_id,
-                )
                 response = results
             else:
                 # Timeout - analysis still in progress
-                logger.info(
-                    "Analysis still in progress for %s after %.1f seconds",
-                    package or cve_id,
-                    ANALYSIS_MAX_WAIT_TIME,
-                )
                 resource_type = "package" if package else "cve"
                 identifier = package or cve_id or "unknown"
                 raise AnalysisInProgressError(
@@ -133,6 +117,79 @@ class QueryService:
                         "poll_interval": ANALYSIS_POLL_INTERVAL,
                     },
                 )
+        else:
+            # Normal flow: try to fetch from database first
+            try:
+                if package:
+                    raw_results = await repository.find_by_package(package, ecosystem, version)
+                    results = self._prioritize(raw_results)
+                    response = QueryResponse(
+                        package=package,
+                        cve_list=[CVEDetail(**item) for item in results],
+                    )
+                elif cve_id:
+                    raw_results = await repository.find_by_cve(cve_id)
+                    results = self._prioritize(raw_results)
+                    response = QueryResponse(
+                        cve_id=cve_id,
+                        cve_list=[CVEDetail(**item) for item in results],
+                    )
+                else:
+                    raise InvalidInputError(
+                        field="package_or_cve_id",
+                        reason="Either 'package' or 'cve_id' parameter must be provided",
+                        details={"package": package, "cve_id": cve_id},
+                    )
+
+            except ResourceNotFound as exc:
+                # Data not found - trigger analysis and wait for results
+                logger.info(
+                    "Data not found for %s (ecosystem=%s), triggering analysis job",
+                    package or cve_id,
+                    ecosystem,
+                )
+
+                # Submit analysis job to Redis
+                if package:
+                    success = await submit_analysis_job(
+                        package_name=package,
+                        version=version or "latest",
+                        force=False,
+                        source="web_query",
+                        ecosystem=ecosystem,
+                    )
+                else:
+                    success = await submit_analysis_job(
+                        cve_id=cve_id,
+                        force=False,
+                        source="web_query_cve_only",
+                        ecosystem=ecosystem,
+                    )
+
+                if not success:
+                    logger.warning("Failed to submit analysis job for %s", package or cve_id)
+                    raise
+
+                # Poll database for results
+                results = await self._poll_for_analysis_results(
+                    repository, package, cve_id, version, ecosystem
+                )
+
+                if results is not None:
+                    response = results
+                else:
+                    # Timeout - analysis still in progress
+                    resource_type = "package" if package else "cve"
+                    identifier = package or cve_id or "unknown"
+                    raise AnalysisInProgressError(
+                        resource_type=resource_type,
+                        identifier=identifier,
+                        details={
+                            "wait_time": ANALYSIS_MAX_WAIT_TIME,
+                            "poll_interval": ANALYSIS_POLL_INTERVAL,
+                        },
+                    )
+
 
         if redis is not None:
             try:
@@ -142,22 +199,27 @@ class QueryService:
         return response
 
     @staticmethod
-    def _build_cache_key(package: Optional[str], cve_id: Optional[str], version: Optional[str] = None) -> str:
+    def _build_cache_key(package: Optional[str], cve_id: Optional[str], version: Optional[str] = None, ecosystem: str = "npm") -> str:
         """캐시 키 생성(Create cache key).
 
         Args:
             package: Package name
             cve_id: CVE ID
             version: Optional version (included in cache key if provided)
+            ecosystem: Package ecosystem
         """
 
         if package:
             if version:
-                return f"query:package:{package}:v{version}"
-            return f"query:package:{package}"
+                return f"query:{ecosystem}:package:{package}:v{version}"
+            return f"query:{ecosystem}:package:{package}"
         if cve_id:
             return f"query:cve:{cve_id}"
-        raise ValueError("Invalid cache key parameters")
+        raise InvalidInputError(
+            field="package_or_cve_id",
+            reason="Either 'package' or 'cve_id' must be provided for cache key generation",
+            details={"package": package, "cve_id": cve_id},
+        )
 
     @staticmethod
     def _prioritize(results: List[dict[str, object]]) -> List[dict[str, object]]:
@@ -198,6 +260,7 @@ class QueryService:
         package: Optional[str],
         cve_id: Optional[str],
         version: Optional[str] = None,
+        ecosystem: str = "npm",
     ) -> Optional[QueryResponse]:
         """분석 결과를 폴링으로 기다림(Poll database for analysis results).
 
@@ -206,6 +269,7 @@ class QueryService:
             package: Package name (if searching by package)
             cve_id: CVE ID (if searching by CVE)
             version: Optional package version
+            ecosystem: Package ecosystem (default: "npm")
 
         Returns:
             QueryResponse if results found within timeout, None otherwise
@@ -220,7 +284,7 @@ class QueryService:
 
                 # Attempt to fetch results
                 if package:
-                    raw_results = await repository.find_by_package(package, version)
+                    raw_results = await repository.find_by_package(package, ecosystem, version)
                     results = self._prioritize(raw_results)
                     response = QueryResponse(
                         package=package,

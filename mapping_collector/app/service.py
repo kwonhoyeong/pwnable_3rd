@@ -63,7 +63,11 @@ class MappingService:
             params["ecosystem"] = ecosystem # Keep for pip/apt if they use it?
         elif ecosystem == "apt":
             params["package"] = package
-            params["release"] = version_range
+            # Map 'latest' to current stable release (bookworm)
+            if version_range.lower() == "latest":
+                params["release"] = "bookworm"
+            else:
+                params["release"] = version_range
             params["ecosystem"] = ecosystem
         else:
             # NVD 2.0 uses keywordSearch
@@ -214,11 +218,37 @@ class MappingService:
 
     @staticmethod
     def _build_prompt(package: str, version_range: str, ecosystem: str) -> str:
-        return (
-            "아래 패키지와 버전 범위에 영향을 주는 CVE ID를 최신 자료 기준으로 찾아 JSON으로만 답해."
-            "\n\n패키지: {package}\n버전 범위: {version_range}\n생태계: {ecosystem}\n\n"
-            "출력 형식:\n"
-            '{{\n  "cve_ids": ["CVE-YYYY-XXXX", ...],\n  "source": "<참조 링크 또는 not_found>"\n}}\n\n'
-            "반드시 JSON만 출력하고 자연어 설명이나 코드블록은 포함하지 마."
-            "찾을 수 없으면 빈 배열과 \"source\": \"not_found\" 로 응답해."
-        ).format(package=package, version_range=version_range, ecosystem=ecosystem)
+        return f"""Find CVE IDs for the **{package} SOFTWARE PACKAGE ITSELF ONLY** (ecosystem: {ecosystem}).
+
+**CRITICAL EXCLUSION RULES**:
+1. DO NOT include CVEs for libraries or packages that {package} depends on
+2. DO NOT include CVEs for packages published to the {ecosystem} registry/ecosystem  
+3. DO NOT include CVEs that say "affects {package} through dependency X"
+4. DO NOT include CVEs for tools/packages used BY {package} internally
+
+**ONLY INCLUDE CVEs WHERE**:
+- The vulnerable component IS {package} itself (not a dependency)
+- The CVE description contains "{package} before version X.Y.Z" or "{package} prior to"
+- The CVE is in the OFFICIAL {package} repository/codebase
+
+**ECOSYSTEM-SPECIFIC GUIDANCE**:
+- For **npm**: ONLY CVEs affecting npm CLI tool itself. EXCLUDE: tar, node-tar, semver, npm-user-validate, readable-stream, etc.
+- For **pip**: ONLY CVEs affecting pip installer itself. EXCLUDE: setuptools, wheel, requests, etc.
+- For **apt**: ONLY CVEs affecting apt package manager itself. EXCLUDE: dpkg, libapt-pkg, etc.
+
+**EXAMPLES FOR npm**:
+✅ INCLUDE: "npm CLI before 6.14.2 allows..." (npm itself)
+✅ INCLUDE: "npm package manager versions prior to 7.0.0" (npm itself)
+❌ EXCLUDE: "tar package used by npm suffers from..." (dependency)
+❌ EXCLUDE: "lodash vulnerability affects npm users" (ecosystem package)
+❌ EXCLUDE: "npm-user-validate before 1.0.1" (separate package)
+
+Return only CVE IDs in the format: CVE-YYYY-NNNNN (one per line). Maximum 50 CVEs.
+
+Output Format (JSON ONLY):
+{{
+  "cve_ids": ["CVE-YYYY-XXXX", ...],
+  "source": "<source link or not_found>"
+}}
+
+Response must be valid JSON without markdown formatting."""

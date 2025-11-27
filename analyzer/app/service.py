@@ -5,12 +5,15 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
-from common_lib.ai_clients import ClaudeClient, GPT5Client
+from common_lib.ai_clients import ClaudeClient, GPT5Client, PerplexityClient
 from common_lib.config import get_settings
 from common_lib.logger import get_logger
 
 from .models import AnalyzerInput, AnalyzerOutput
 from .prompts import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
+from .validators import ResponseValidator
+from .fact_checker import NVDFactChecker
+from .ensemble_validator import EnsembleValidator
 
 logger = get_logger(__name__)
 
@@ -79,7 +82,11 @@ class EnterpriseAnalysisGenerator:
 
     def __init__(self) -> None:
         self._client = ClaudeClient()
+        self._gpt_client = GPT5Client()  # For ensemble validation
+        self._perplexity = PerplexityClient()
         self._allow_external = get_settings().allow_external_calls
+        self._fact_checker = NVDFactChecker()  # Phase 3: NVD cross-validation
+        self._enable_ensemble = get_settings().allow_external_calls  # Ensemble requires API calls
 
     async def generate_analysis(self, payload: AnalyzerInput) -> tuple[str, str]:
         """AI 기반 엔터프라이즈 분석 리포트 생성(Generate enterprise analysis report)."""
@@ -95,28 +102,119 @@ class EnterpriseAnalysisGenerator:
         cvss_display = f"{payload.cvss_score:.1f}" if payload.cvss_score is not None else "Not available"
         epss_display = f"{payload.epss_score:.3f}" if payload.epss_score is not None else "Not available"
 
+        # Identify package if generic
+        real_package = payload.package
+        if payload.package.lower() == "generic":
+            identified_package = await self._identify_package(payload.cve_id)
+            if identified_package:
+                real_package = identified_package
+                threat_context += f"\n\n[Auto-Identified Context] This CVE affects package: {identified_package}"
+
         # Build user prompt using template
         user_prompt = USER_PROMPT_TEMPLATE.format(
             cve_id=payload.cve_id,
-            package=payload.package,
+            package=real_package,
             version_range=payload.version_range,
             threat_context=threat_context,
             cvss_score=cvss_display,
             epss_score=epss_display,
+            description=payload.description or "No description available.",
         )
 
         try:
             # Call Claude with system prompt to generate English report
             english_response = await self._client.chat(user_prompt, system=SYSTEM_PROMPT)
 
-            # Extract AI risk level from English response
-            ai_risk_level = self._extract_ai_risk_level(english_response)
+            # === Phase 3 (Optional): Multi-AI Ensemble Validation ===
+            final_english_response = english_response
+            ensemble_confidence = 1.0
+
+            if self._enable_ensemble:
+                try:
+                    logger.info(f"Running ensemble validation (Claude + GPT-5) for {payload.cve_id}")
+
+                    # Generate GPT-5 report in parallel
+                    gpt_response = await self._gpt_client.chat(user_prompt, system=SYSTEM_PROMPT)
+
+                    # Compare responses
+                    is_consistent, discrepancies, confidence = EnsembleValidator.compare_responses(
+                        english_response, gpt_response, payload.cve_id
+                    )
+
+                    ensemble_confidence = confidence
+
+                    if is_consistent:
+                        logger.info(f"✅ Ensemble validation: High consensus (confidence: {confidence:.2f})")
+                    else:
+                        logger.warning(
+                            f"⚠️ Ensemble validation: Discrepancies found (confidence: {confidence:.2f})"
+                        )
+
+                    # Select consensus response
+                    final_english_response = EnsembleValidator.select_consensus_response(
+                        english_response, gpt_response, discrepancies, confidence
+                    )
+
+                except Exception as exc:
+                    logger.warning(f"Ensemble validation failed for {payload.cve_id}, using Claude response: {exc}")
+                    final_english_response = english_response
+
+            # Extract AI risk level from final English response
+            ai_risk_level = self._extract_ai_risk_level(final_english_response)
 
             # Translate to Korean
-            korean_response = await self._translate_to_korean(english_response)
+            korean_response = await self._translate_to_korean(final_english_response)
 
-            logger.info("Successfully generated and translated enterprise analysis for %s (AI Risk: %s)", payload.cve_id, ai_risk_level)
-            return korean_response, ai_risk_level
+            # === Phase 2: Validate the response for hallucinations ===
+            validated_response, validation_warnings = ResponseValidator.validate_cve_report(
+                korean_response, payload
+            )
+
+            # Calculate hallucination risk
+            hallucination_risk = ResponseValidator.calculate_hallucination_risk(validation_warnings)
+
+            # === Phase 3: NVD cross-validation ===
+            nvd_verification = None
+            if self._allow_external and payload.cvss_score is not None:
+                try:
+                    nvd_verification = await self._fact_checker.verify_cve_details(
+                        payload.cve_id, payload.cvss_score
+                    )
+
+                    if nvd_verification and not nvd_verification["verified"]:
+                        for discrepancy in nvd_verification["discrepancies"]:
+                            logger.warning(f"NVD cross-validation: {discrepancy}")
+                            validation_warnings.append(f"🔍 NVD: {discrepancy}")
+                        # Increase hallucination risk if NVD finds issues
+                        hallucination_risk = min(hallucination_risk + 0.2, 1.0)
+                    elif nvd_verification and nvd_verification["verified"]:
+                        logger.info(f"✅ NVD cross-validation passed for {payload.cve_id}")
+                except Exception as exc:
+                    logger.warning(f"NVD cross-validation failed for {payload.cve_id}: {exc}")
+
+            # Log validation results
+            if validation_warnings:
+                logger.warning(
+                    "Report validation warnings for %s (Hallucination Risk: %.2f):",
+                    payload.cve_id,
+                    hallucination_risk,
+                )
+                for warning in validation_warnings:
+                    logger.warning("  - %s", warning)
+            else:
+                logger.info(
+                    "Report validation passed for %s (Hallucination Risk: 0.00)",
+                    payload.cve_id,
+                )
+
+            logger.info(
+                "Successfully generated and validated enterprise analysis for %s (AI Risk: %s, Hallucination Risk: %.2f)",
+                payload.cve_id,
+                ai_risk_level,
+                hallucination_risk,
+            )
+
+            return validated_response, ai_risk_level
         except RuntimeError as exc:
             logger.info("Claude 분석 실패, 폴백 사용(Analysis falling back): %s", exc)
             return self._fallback_summary(), "MEDIUM"
@@ -143,11 +241,88 @@ class EnterpriseAnalysisGenerator:
 번역된 한국어 보고서만 출력하세요. 추가 설명이나 주석은 불필요합니다."""
 
         try:
-            korean_report = await self._client.chat(translation_prompt)
+            # Format the prompt with the actual report
+            formatted_prompt = translation_prompt.replace("{{english_report}}", english_report)
+            korean_report = await self._client.chat(formatted_prompt)
             return korean_report
         except RuntimeError as exc:
             logger.warning("번역 실패, 영어 보고서 반환(Translation failed, returning English): %s", exc)
             return english_report
+
+    async def _identify_package(self, cve_id: str) -> Optional[str]:
+        """
+        Identify affected package using Perplexity with validation.
+        
+        Enhanced with Phase 2 anti-hallucination measures:
+        - Stricter prompt to request exact package name only
+        - Length and format validation
+        - Handling of "UNKNOWN" response
+        """
+        try:
+            prompt = f"""What is the EXACT software package name affected by {cve_id}?
+
+CRITICAL INSTRUCTIONS:
+- Return ONLY the package name (e.g., 'lodash', 'react', 'openssl', 'nginx')
+- If you're not certain, return 'UNKNOWN'
+- Do not include:
+  * Version numbers
+  * Descriptive text or explanations
+  * Multiple package names
+  * Programming language names
+  * Platform names
+
+Example responses:
+- Good: "lodash"
+- Bad: "lodash 4.17.20"
+- Bad: "The npm package lodash"
+"""
+            response = await self._perplexity.chat(prompt, temperature=0.1)
+
+            # Cleanup and validation
+            package_name = response.strip().split('\n')[0].strip().strip('"').strip("'")
+
+            # === Validation checks ===
+            # 1. Check for explicit "UNKNOWN"
+            if package_name.upper() == 'UNKNOWN' or package_name.upper() == 'N/A':
+                logger.info(f"Perplexity unable to identify package for {cve_id}")
+                return None
+
+            # 2. Length validation (package names are typically short)
+            if len(package_name) > 50:
+                logger.warning(
+                    f"Suspicious package name from Perplexity (too long): '{package_name}' for {cve_id}"
+                )
+                return None
+
+            # 3. Check for spaces (package names shouldn't have spaces)
+            if ' ' in package_name:
+                logger.warning(
+                    f"Suspicious package name from Perplexity (contains spaces): '{package_name}' for {cve_id}"
+                )
+                return None
+
+            # 4. Check for common false positives
+            invalid_patterns = [
+                'the package', 'software', 'library', 'framework', 'application',
+                'npm package', 'python package', 'affects', 'vulnerability', 'cve'
+            ]
+            if any(pattern in package_name.lower() for pattern in invalid_patterns):
+                logger.warning(
+                    f"Suspicious package name from Perplexity (descriptive text detected): '{package_name}' for {cve_id}"
+                )
+                return None
+
+            # 5. Empty or very short check
+            if len(package_name) < 2:
+                logger.warning(f"Package name too short: '{package_name}' for {cve_id}")
+                return None
+
+            logger.info(f"✅ Successfully identified package for {cve_id}: {package_name}")
+            return package_name
+
+        except Exception as exc:
+            logger.warning(f"Failed to identify package for {cve_id}: {exc}")
+            return None
 
     @staticmethod
     def _build_threat_context(payload: AnalyzerInput) -> str:
@@ -285,8 +460,8 @@ class AnalyzerService:
             ai_risk_level,
         )
 
-        # Determine risk level: use AI assessment, but validate against weighted score
-        risk_level = ai_risk_level
+        # Determine risk level based on the calculated weighted score
+        risk_level = self._scoring.score_to_risk_level(risk_score)
 
         # Generate recommendations
         recommendations = await self._recommendation.generate(payload, risk_level)

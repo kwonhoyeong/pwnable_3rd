@@ -55,6 +55,7 @@ NPM 생태계 중심의 공급망 취약점을 자동 수집·분석하여 CVSS/
 | `NT_QUERY_API_KEYS` | `dev-api-key-123,admin-key-456` 형식으로 QueryAPI 인증 키 | QueryAPI 사용 시 필수 |
 | `NT_ENVIRONMENT` | `development`/`production` | 로깅·디버그 제어 |
 | `VITE_API_URL`, `VITE_QUERY_API_URL`, `VITE_QUERY_API_KEY` | 웹 프론트엔드 → QueryAPI 연결 정보 | Dashboard 사용 시 필수 |
+| `VITE_QUERY_API_BASE_URL` | 프론트엔드 QueryContext 전용 `/api/v1` 기본 경로 | Dashboard 사용 시 권장 |
 
 기본 템플릿은 `.env.example`에 있으며 필요 시 `NT_CACHE_TTL_SECONDS`, `NT_LOG_LEVEL`, `NT_GPT5_MODEL`, `NT_CLAUDE_MODEL` 등을 덮어쓸 수 있습니다.
 
@@ -182,7 +183,11 @@ npm run dev -- --host 0.0.0.0
   - `GET /api/v1/stats`  
   - `GET /health`
 - **응답 표준**: `{ "error": { "code": "...", "message": "...", "details": {...} } }` 형태의 에러 봉투 및 `X-Request-ID` 헤더
-- **웹 UI**: `SearchBar`, `StatsCards`, `RecentScansTable` 조합으로 패키지 검색, 분석 대기 상태(`ANALYSIS_IN_PROGRESS`) 안내, Request ID 자동 부여
+- **Force/폴백 플로우**:  
+  - `force=true`로 요청 시 Redis/DB 캐시를 무시하고 해당 패키지·버전(또는 CVE)의 기존 레코드를 삭제한 뒤 `analysis_tasks` 큐에 재분석 작업을 제출  
+  - 패키지 조회는 `ecosystem` 파라미터로 NPM/PyPI/apt 데이터를 격리하며, DB 삭제도 생태계별로 수행  
+  - QueryService가 폴링 중 DB에 데이터가 없으면 `AnalysisInProgressError`(HTTP 202)를 반환하고, 프론트엔드는 배너로 노출
+- **웹 UI**: `SearchBar`, `StatsCards`, `RecentScansTable` 조합으로 패키지 검색, 분석 대기 상태(`ANALYSIS_IN_PROGRESS`) 안내, Request ID 자동 부여. React Query는 `VITE_API_URL`/`VITE_QUERY_API_BASE_URL`을 통해 백엔드와 통신합니다.
 
 ## 분석 작업 큐 & 자동 트리거
 - Redis 리스트 `analysis_tasks` 사용 (`worker.py`, `query_api/app/redis_ops.py`)
@@ -191,10 +196,12 @@ npm run dev -- --host 0.0.0.0
 
 ## 테스트 / 진단 / 검증
 - `pytest tests/test_perplexity_parsers.py`
+- `pytest tests/test_regression.py -v` : API 인증, Stats UPPERCASE 키, CVSS Fetcher 폴백, 멀티 에코시스템 동작 회귀 테스트
 - `python scripts/health_check.py` : API 키·헬스·캐시 동작 체크
 - `python scripts/verify_system.py` : 전체 시스템 검증 루틴
 - `npm test` (web_frontend) – 필요 시 구성
 - GitHub Actions 등 외부 CI에선 `docker-compose` 조합 또는 `scripts/setup.sh` 활용 가능
+- 수동 검증은 `VERIFICATION_GUIDE.md` 참고 (API 키 인증, Stats 스키마, 워커 DLQ, 대시보드 시나리오 등 상세 단계 제공)
 
 ## 시스템 상태
 - 다중 에이전트 파이프라인, Redis 캐시, PostgreSQL 영속화, AI 폴백 전략, QueryAPI 인증·레이트리밋, React 대시보드, Request ID 미들웨어, JSONB 위협 사례 저장 등 **정상 동작**
@@ -208,7 +215,6 @@ npm run dev -- --host 0.0.0.0
 - Docker Compose는 개발용 설정이며 프로덕션 배포 시 별도 보안 강화를 권장
 
 ## 문서 모음
-- `SETUP.md`: 팀 개발환경 세팅 가이드
 - `docs/ARCHITECTURE.md`: 전체 데이터 흐름, AI 역할, 최근 개선 사항
 - `docs/API.md`: 각 마이크로서비스 REST 명세 및 인증/레이트리밋 설명
 - `docs/DOCKER.md`: Docker 협업 환경 가이드

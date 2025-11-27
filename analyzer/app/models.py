@@ -16,6 +16,7 @@ class AnalyzerInput(BaseModel):
     cases: List[dict] = Field(default_factory=list, description="위협 사례 목록")
     package: str = Field(..., description="패키지 이름")
     version_range: str = Field(..., description="버전 범위")
+    description: str | None = Field(default=None, description="CVE 설명(Description)")
 
 
 class AnalyzerOutput(BaseModel):

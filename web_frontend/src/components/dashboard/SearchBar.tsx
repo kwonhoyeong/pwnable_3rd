@@ -7,9 +7,16 @@ import { clsx } from 'clsx';
 export interface SearchBarProps {
   onSearch?: (packageName: string, version: string) => void;
   isLoading?: boolean;
+  ecosystem?: string;
+  onEcosystemChange?: (ecosystem: string) => void;
 }
 
-export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading = false }) => {
+export const SearchBar: React.FC<SearchBarProps> = ({
+  onSearch,
+  isLoading = false,
+  ecosystem = 'npm',
+  onEcosystemChange
+}) => {
   const [packageName, setPackageName] = useState('');
   const [version, setVersion] = useState('latest');
   const [error, setError] = useState('');
@@ -42,7 +49,41 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading = fals
   return (
     <div className="card p-6 mb-6">
       <form onSubmit={handleSearch} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {/* Ecosystem Selector */}
+          <div className="md:col-span-1">
+            <label
+              htmlFor="ecosystem"
+              className="block text-sm font-medium mb-2"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              패키지
+            </label>
+            <select
+              id="ecosystem"
+              value={ecosystem}
+              onChange={(e) => onEcosystemChange?.(e.target.value)}
+              disabled={isLoading}
+              className={clsx(
+                'w-full px-4 py-2.5',
+                'rounded-lg border',
+                'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+                'transition-all duration-200',
+                'appearance-none cursor-pointer'
+              )}
+              style={{
+                backgroundColor: 'var(--color-bg-primary)',
+                borderColor: 'var(--color-border)',
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              <option value="npm">NPM</option>
+              <option value="pip">PIP</option>
+              <option value="apt">APT</option>
+            </select>
+          </div>
+
           {/* Package Name Input */}
           <div className="md:col-span-2 relative">
             <label
@@ -95,7 +136,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading = fals
             <input
               id="version"
               type="text"
-              placeholder="최신"
+              placeholder="latest"
               value={version}
               onChange={(e) => setVersion(e.target.value)}
               disabled={isLoading}

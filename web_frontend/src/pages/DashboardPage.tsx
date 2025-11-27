@@ -24,9 +24,10 @@ import {
  */
 export const DashboardPage: React.FC = () => {
   // Search state
-  const [searchParams, setSearchParams] = useState<{ package: string; version: string } | null>(
+  const [searchParams, setSearchParams] = useState<{ package: string; version: string; ecosystem: string } | null>(
     null
   );
+  const [selectedEcosystem, setSelectedEcosystem] = useState<string>('npm');
 
   // ============================================================================
   // REACT-QUERY HOOKS
@@ -61,10 +62,11 @@ export const DashboardPage: React.FC = () => {
       if (!searchParams) {
         return Promise.reject(new Error('No search params'));
       }
-      // Pass both package and version to the backend
+      // Pass package, version, and ecosystem to the backend
       return queryAPI.query({
         package: searchParams.package,
         version: searchParams.version || 'latest', // Default to 'latest' if not specified
+        ecosystem: searchParams.ecosystem,
       }).then((res) => res.data);
     },
     enabled: !!searchParams, // Only run when searchParams is not null
@@ -79,7 +81,14 @@ export const DashboardPage: React.FC = () => {
    * Handle search submission
    */
   const handleSearch = (packageName: string, version: string) => {
-    setSearchParams({ package: packageName, version });
+    // Check if it's a CVE ID search
+    if (packageName.toUpperCase().startsWith('CVE-')) {
+      // For CVE search, ecosystem doesn't matter as much, but we pass it anyway
+      // Ideally backend handles CVE search regardless of ecosystem
+      setSearchParams({ package: packageName, version, ecosystem: selectedEcosystem });
+    } else {
+      setSearchParams({ package: packageName, version, ecosystem: selectedEcosystem });
+    }
   };
 
   /**
@@ -102,15 +111,6 @@ export const DashboardPage: React.FC = () => {
     low: statsQuery.data?.risk_distribution?.LOW ?? 0,
   };
 
-  // Risk distribution for chart
-  const riskDistribution = statsQuery.data?.risk_distribution ?? {
-    CRITICAL: 0,
-    HIGH: 0,
-    MEDIUM: 0,
-    LOW: 0,
-    Unknown: 0,
-  };
-
   // Determine which scans to display: search results or history
   const displayedScans: ScanRecord[] = searchQuery.data?.cve_list
     ? convertCVEDetailsToScanRecords(searchQuery.data.cve_list)
@@ -126,7 +126,12 @@ export const DashboardPage: React.FC = () => {
 
 
       {/* Search Section */}
-      <SearchBar onSearch={handleSearch} isLoading={searchQuery.isFetching} />
+      <SearchBar
+        onSearch={handleSearch}
+        isLoading={searchQuery.isLoading}
+        ecosystem={selectedEcosystem}
+        onEcosystemChange={setSelectedEcosystem}
+      />
 
       {/* Error Messages */}
       {statsQuery.isError && (
