@@ -50,36 +50,36 @@ class ErrorBoundary extends Component<Props, State> {
     render() {
         if (this.state.hasError) {
             return (
-                <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
-                    <div className="max-w-2xl w-full bg-white dark:bg-slate-800 rounded-lg shadow-xl p-8">
+                <div className="min-h-screen bg-sentinel-bg flex items-center justify-center p-4">
+                    <div className="max-w-2xl w-full glass-panel rounded-2xl p-8 border border-sentinel-error/20 shadow-neon-red">
                         <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
-                                <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
+                            <div className="p-3 bg-sentinel-error/10 rounded-full border border-sentinel-error/30">
+                                <AlertTriangle className="w-8 h-8 text-sentinel-error" />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                                <h1 className="text-2xl font-bold text-white font-heading">
                                     Something went wrong
                                 </h1>
-                                <p className="text-slate-600 dark:text-slate-400">
+                                <p className="text-sentinel-text-muted">
                                     The application encountered an unexpected error
                                 </p>
                             </div>
                         </div>
 
                         {this.state.error && (
-                            <div className="mb-6 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <div className="mb-6 p-4 bg-sentinel-surface/50 rounded-lg border border-white/5">
+                                <h2 className="text-sm font-semibold text-sentinel-text-main mb-2">
                                     Error Details:
                                 </h2>
-                                <p className="text-sm font-mono text-red-600 dark:text-red-400">
+                                <p className="text-sm font-mono text-sentinel-error break-all">
                                     {this.state.error.toString()}
                                 </p>
-                                {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+                                {import.meta.env.DEV && this.state.errorInfo && (
                                     <details className="mt-4">
-                                        <summary className="cursor-pointer text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                                        <summary className="cursor-pointer text-sm text-sentinel-text-muted hover:text-white transition-colors">
                                             Stack Trace
                                         </summary>
-                                        <pre className="mt-2 text-xs text-slate-600 dark:text-slate-400 overflow-auto max-h-64">
+                                        <pre className="mt-2 text-xs text-sentinel-text-muted overflow-auto max-h-64 p-2 bg-black/30 rounded">
                                             {this.state.errorInfo.componentStack}
                                         </pre>
                                     </details>
@@ -90,19 +90,19 @@ class ErrorBoundary extends Component<Props, State> {
                         <div className="flex gap-3">
                             <button
                                 onClick={this.handleReset}
-                                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                                className="flex-1 px-4 py-2 bg-sentinel-primary/10 hover:bg-sentinel-primary/20 text-sentinel-primary border border-sentinel-primary/50 rounded-lg font-medium transition-all hover:shadow-neon-blue"
                             >
                                 Return to Dashboard
                             </button>
                             <button
                                 onClick={() => window.location.reload()}
-                                className="flex-1 px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg font-medium transition-colors"
+                                className="flex-1 px-4 py-2 bg-sentinel-surface hover:bg-white/5 text-white border border-white/10 rounded-lg font-medium transition-colors"
                             >
                                 Reload Page
                             </button>
                         </div>
 
-                        <p className="mt-6 text-sm text-slate-500 dark:text-slate-400 text-center">
+                        <p className="mt-6 text-sm text-sentinel-text-muted text-center">
                             If this problem persists, please check the browser console for more details
                         </p>
                     </div>

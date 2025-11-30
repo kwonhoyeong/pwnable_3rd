@@ -5,146 +5,48 @@
 @tailwind utilities;
 
 @layer base {
-  html {
-    @apply scroll-smooth;
-  }
-
   body {
-    @apply bg-background text-text-main font-sans;
+    @apply bg-sentinel-bg text-sentinel-text-main font-sans antialiased;
+    background-image:
+      radial-gradient(circle at 50% 0%, rgba(112, 0, 255, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(0, 240, 255, 0.1) 0%, transparent 30%);
+    min-height: 100vh;
   }
 
-  /* Custom scrollbar for dark theme */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: var(--color-bg-secondary);
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: var(--color-bg-tertiary);
-    border-radius: 4px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #475569;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading font-bold;
   }
 }
 
 @layer components {
+  .glass-panel {
+    @apply bg-sentinel-surface/60 backdrop-blur-xl border border-white/10 shadow-xl;
+  }
 
-  /* Modern buttons - Dark theme */
+  .glass-input {
+    @apply bg-sentinel-surface/40 border border-white/10 text-white placeholder-sentinel-text-muted focus:border-sentinel-primary focus:ring-1 focus:ring-sentinel-primary focus:outline-none transition-all duration-300;
+  }
+
   .btn-primary {
-    @apply px-5 py-2.5 rounded-lg font-medium transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900;
-    background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-dark) 100%);
-    color: white;
-    box-shadow: 0 1px 3px 0 rgba(139, 92, 246, 0.4);
-  }
-
-  .btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px 0 rgba(139, 92, 246, 0.5);
-  }
-
-  .btn-primary:active {
-    transform: translateY(0);
-  }
-
-  .btn-secondary {
-    @apply px-5 py-2.5 border text-slate-200 rounded-lg font-medium hover:bg-slate-700 transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 focus:ring-offset-slate-900;
-    border-color: var(--color-border);
-  }
-
-  /* Clean cards - Dark theme from reference */
-  .card {
-    @apply rounded-xl border;
-    background-color: var(--color-bg-secondary);
-    border-color: var(--color-border);
-    box-shadow: var(--shadow-sm);
-    transition: box-shadow 0.2s ease;
-  }
-
-  .card:hover {
-    box-shadow: var(--shadow-md);
-  }
-
-  .card-elevated {
-    @apply rounded-xl border;
-    background-color: var(--color-bg-elevated);
-    border-color: var(--color-border);
-    box-shadow: var(--shadow-md);
-  }
-
-  /* Stats card - Reference dark style */
-  .stats-card {
-    @apply p-6 rounded-xl;
-    background-color: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    box-shadow: var(--shadow-sm);
-    transition: all 0.2s ease;
-  }
-
-  .stats-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-    border-color: var(--color-border-hover);
-  }
-
-  /* Vulnerability badges - Dark theme */
-  .badge-critical {
-    @apply px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center;
-    background-color: rgba(248, 113, 113, 0.15);
-    color: var(--color-critical);
-    border: 1px solid rgba(248, 113, 113, 0.3);
-  }
-
-  .badge-high {
-    @apply px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center;
-    background-color: rgba(251, 146, 60, 0.15);
-    color: var(--color-high);
-    border: 1px solid rgba(251, 146, 60, 0.3);
-  }
-
-  .badge-medium {
-    @apply px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center;
-    background-color: rgba(251, 191, 36, 0.15);
-    color: var(--color-medium);
-    border: 1px solid rgba(251, 191, 36, 0.3);
-  }
-
-  .badge-low {
-    @apply px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center;
-    background-color: rgba(74, 222, 128, 0.15);
-    color: var(--color-low);
-    border: 1px solid rgba(74, 222, 128, 0.3);
+    @apply bg-sentinel-primary/10 text-sentinel-primary border border-sentinel-primary/50 hover:bg-sentinel-primary hover:text-black hover:shadow-neon-blue transition-all duration-300 font-heading font-semibold uppercase tracking-wider;
   }
 }
 
-@layer utilities {
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
 
-  /* Smooth hover lift */
-  .hover-lift {
-    @apply transition-transform duration-200 ease-out;
-  }
+::-webkit-scrollbar-track {
+  @apply bg-sentinel-bg;
+}
 
-  .hover-lift:hover {
-    transform: translateY(-2px);
-  }
-
-  /* Gradient text */
-  .text-gradient {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-dark) 100%);
-  }
-
-  /* Percentage change indicators */
-  .trend-up {
-    @apply text-green-400 text-sm font-medium;
-  }
-
-  .trend-down {
-    @apply text-red-400 text-sm font-medium;
-  }
+::-webkit-scrollbar-thumb {
+  @apply bg-sentinel-surface border border-white/10 rounded-full hover:bg-sentinel-primary/50;
 }

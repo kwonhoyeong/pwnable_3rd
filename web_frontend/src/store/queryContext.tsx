@@ -16,12 +16,13 @@ export interface QueryState {
   loading: boolean;
   error: string | null;
   package?: string;
+  ecosystem?: string;
   cve_id?: string;
   results: CVEDetail[];
 }
 
 interface QueryContextValue extends QueryState {
-  search: (params: { package?: string; cve_id?: string }) => Promise<void>;
+  search: (params: { package?: string; ecosystem?: string; cve_id?: string }) => Promise<void>;
 }
 
 const QueryContext = createContext<QueryContextValue | undefined>(undefined);
@@ -29,11 +30,11 @@ const QueryContext = createContext<QueryContextValue | undefined>(undefined);
 export const QueryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<QueryState>({ loading: false, error: null, results: [] });
 
-  const search = async ({ package: pkg, cve_id }: { package?: string; cve_id?: string }) => {
+  const search = async ({ package: pkg, ecosystem, cve_id }: { package?: string; ecosystem?: string; cve_id?: string }) => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const baseUrl = import.meta.env.VITE_QUERY_API_BASE_URL || '/api/v1';
-      const response = await apiClient.get(`${baseUrl}/query`, { params: { package: pkg, cve_id } });
+      const response = await apiClient.get(`${baseUrl}/query`, { params: { package: pkg, ecosystem, cve_id } });
       const ordered = (response.data.cve_list || []).slice().sort(
         (a: CVEDetail, b: CVEDetail) => b.risk_score - a.risk_score,
       );
@@ -41,11 +42,12 @@ export const QueryProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         loading: false,
         error: null,
         package: response.data.package,
+        ecosystem: response.data.ecosystem,
         cve_id: response.data.cve_id,
         results: ordered,
       });
     } catch (error) {
-      setState({ loading: false, error: '조회 실패(Query failed)', results: [], package: pkg, cve_id });
+      setState({ loading: false, error: '조회 실패(Query failed)', results: [], package: pkg, ecosystem, cve_id });
     }
   };
 

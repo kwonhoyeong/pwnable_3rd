@@ -8,29 +8,45 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#111315', // Deep Charcoal
-        surface: '#1A1D1F',    // Soft Black
-        primary: '#6C5DD3',    // Royal Purple
-        secondary: '#6F767E',  // Slate Grey
-        accent: {
-          blue: '#3F8CFF',
-          orange: '#FF754C',
-          yellow: '#FFCE73',
-          green: '#7FBA7A',
+        sentinel: {
+          bg: '#050505',      // Deepest Black
+          surface: '#121212', // Off-black for cards
+          primary: '#00F0FF', // Neon Cyan
+          secondary: '#7000FF', // Electric Purple
+          success: '#00FF94', // Neon Green
+          warning: '#FFB800', // Neon Orange
+          error: '#FF0055',   // Neon Red
+          text: {
+            main: '#FFFFFF',
+            muted: '#94A3B8',
+          }
         },
-        text: {
-          main: '#FFFFFF',
-          muted: '#6F767E',
-        },
-        // Semantic mappings for compatibility
-        critical: '#FF754C',
-        high: '#FFCE73',
-        medium: '#3F8CFF',
-        low: '#7FBA7A',
+        // Legacy mappings for compatibility
+        background: '#050505',
+        surface: '#121212',
+        primary: '#00F0FF',
+        secondary: '#7000FF',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
+        heading: ['Outfit', 'sans-serif'],
       },
+      boxShadow: {
+        'neon-blue': '0 0 10px rgba(0, 240, 255, 0.5), 0 0 20px rgba(0, 240, 255, 0.3)',
+        'neon-purple': '0 0 10px rgba(112, 0, 255, 0.5), 0 0 20px rgba(112, 0, 255, 0.3)',
+      },
+      dropShadow: {
+        'neon': '0 0 10px rgba(0, 240, 255, 0.5)',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        }
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-out forwards',
+      }
     },
   },
   plugins: [],

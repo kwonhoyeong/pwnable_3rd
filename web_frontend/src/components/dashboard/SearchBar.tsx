@@ -47,15 +47,14 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   };
 
   return (
-    <div className="card p-6 mb-6">
+    <div className="glass-panel p-6 mb-6 rounded-2xl">
       <form onSubmit={handleSearch} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {/* Ecosystem Selector */}
           <div className="md:col-span-1">
             <label
               htmlFor="ecosystem"
-              className="block text-sm font-medium mb-2"
-              style={{ color: 'var(--color-text-secondary)' }}
+              className="block text-sm font-medium mb-2 text-sentinel-text-muted"
             >
               패키지
             </label>
@@ -65,22 +64,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               onChange={(e) => onEcosystemChange?.(e.target.value)}
               disabled={isLoading}
               className={clsx(
-                'w-full px-4 py-2.5',
-                'rounded-lg border',
-                'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                'transition-all duration-200',
-                'appearance-none cursor-pointer'
+                'glass-input w-full px-4 py-2.5 rounded-lg appearance-none cursor-pointer',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
-              style={{
-                backgroundColor: 'var(--color-bg-primary)',
-                borderColor: 'var(--color-border)',
-                color: 'var(--color-text-primary)',
-              }}
             >
-              <option value="npm">NPM</option>
-              <option value="pip">PIP</option>
-              <option value="apt">APT</option>
+              <option value="npm" className="bg-sentinel-surface text-white">NPM</option>
+              <option value="pip" className="bg-sentinel-surface text-white">PIP</option>
+              <option value="apt" className="bg-sentinel-surface text-white">APT</option>
             </select>
           </div>
 
@@ -88,15 +78,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           <div className="md:col-span-2 relative">
             <label
               htmlFor="package"
-              className="block text-sm font-medium mb-2"
-              style={{ color: 'var(--color-text-secondary)' }}
+              className="block text-sm font-medium mb-2 text-sentinel-text-muted"
             >
               패키지 이름
             </label>
             <div className="relative">
               <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5"
-                style={{ color: 'var(--color-text-tertiary)' }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-sentinel-text-muted"
               />
               <input
                 id="package"
@@ -109,17 +97,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                 }}
                 disabled={isLoading}
                 className={clsx(
-                  'w-full pl-11 pr-4 py-2.5',
-                  'rounded-lg border',
-                  'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'transition-all duration-200'
+                  'glass-input w-full pl-11 pr-4 py-2.5 rounded-lg',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
-                style={{
-                  backgroundColor: 'var(--color-bg-primary)',
-                  borderColor: 'var(--color-border)',
-                  color: 'var(--color-text-primary)',
-                }}
               />
             </div>
           </div>
@@ -128,8 +108,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           <div className="md:col-span-1">
             <label
               htmlFor="version"
-              className="block text-sm font-medium mb-2"
-              style={{ color: 'var(--color-text-secondary)' }}
+              className="block text-sm font-medium mb-2 text-sentinel-text-muted"
             >
               버전
             </label>
@@ -141,17 +120,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               onChange={(e) => setVersion(e.target.value)}
               disabled={isLoading}
               className={clsx(
-                'w-full px-4 py-2.5',
-                'rounded-lg border',
-                'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                'transition-all duration-200'
+                'glass-input w-full px-4 py-2.5 rounded-lg',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
-              style={{
-                backgroundColor: 'var(--color-bg-primary)',
-                borderColor: 'var(--color-border)',
-                color: 'var(--color-text-primary)',
-              }}
             />
           </div>
 
@@ -162,7 +133,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               variant="primary"
               disabled={isLoading || !packageName.trim()}
               isLoading={isLoading}
-              className="w-full"
+              className="w-full btn-primary"
             >
               {isLoading ? '분석 중...' : '분석'}
             </Button>
@@ -171,14 +142,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
         {/* Error Message */}
         {error && (
-          <div
-            className="flex items-center gap-2 p-3 rounded-lg border"
-            style={{
-              backgroundColor: 'rgba(248, 113, 113, 0.1)',
-              borderColor: 'rgba(248, 113, 113, 0.3)',
-              color: 'var(--color-critical)',
-            }}
-          >
+          <div className="flex items-center gap-2 p-3 rounded-lg border bg-sentinel-error/10 border-sentinel-error/30 text-sentinel-error">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <p className="text-sm">{error}</p>
           </div>

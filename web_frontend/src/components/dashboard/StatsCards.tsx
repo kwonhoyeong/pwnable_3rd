@@ -37,8 +37,8 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
       label: 'Total Scans',
       value: totalScans,
       icon: TrendingUp,
-      color: 'text-primary',
-      bg: 'bg-primary/20',
+      color: 'text-sentinel-primary',
+      bg: 'bg-sentinel-primary/20',
       trend: '+4.5%',
       trendUp: true,
     },
@@ -46,8 +46,8 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
       label: 'Critical',
       value: critical,
       icon: Shield,
-      color: 'text-accent-orange',
-      bg: 'bg-accent-orange/20',
+      color: 'text-sentinel-error',
+      bg: 'bg-sentinel-error/20',
       trend: '-2.3%',
       trendUp: false,
     },
@@ -55,8 +55,8 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
       label: 'High',
       value: high,
       icon: AlertTriangle,
-      color: 'text-accent-yellow',
-      bg: 'bg-accent-yellow/20',
+      color: 'text-sentinel-warning',
+      bg: 'bg-sentinel-warning/20',
       trend: '+1.8%',
       trendUp: true,
     },
@@ -64,8 +64,8 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
       label: 'Medium',
       value: medium,
       icon: AlertCircle,
-      color: 'text-accent-blue',
-      bg: 'bg-accent-blue/20',
+      color: 'text-sentinel-primary',
+      bg: 'bg-sentinel-primary/20',
       trend: '-0.5%',
       trendUp: false,
     },
@@ -73,8 +73,8 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
       label: 'Low',
       value: low,
       icon: Info,
-      color: 'text-accent-green',
-      bg: 'bg-accent-green/20',
+      color: 'text-sentinel-success',
+      bg: 'bg-sentinel-success/20',
       trend: '+3.2%',
       trendUp: true,
     },
@@ -89,7 +89,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
         return (
           <div
             key={stat.label}
-            className="group relative p-6 rounded-[24px] bg-surface border border-white/5 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden"
+            className="group relative p-6 rounded-[24px] glass-panel hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden"
           >
             {/* Background Glow Effect */}
             <div className={clsx(
@@ -98,7 +98,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             )} />
 
             <div className="flex justify-between items-start mb-6 relative z-10">
-              <span className="text-sm font-semibold text-secondary">
+              <span className="text-sm font-semibold text-sentinel-text-muted">
                 {stat.label}
               </span>
               <div className={clsx(
@@ -111,7 +111,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             </div>
 
             <div className="flex flex-col gap-3 relative z-10">
-              <h3 className="text-4xl font-bold text-white tracking-tight">
+              <h3 className="text-4xl font-bold text-white tracking-tight font-heading">
                 {stat.value.toLocaleString()}
               </h3>
             </div>

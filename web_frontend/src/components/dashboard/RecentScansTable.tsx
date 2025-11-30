@@ -51,16 +51,12 @@ export const RecentScansTable: React.FC<RecentScansTableProps> = ({
           {[...Array(5)].map((_, i) => (
             <div
               key={i}
-              className="h-16 rounded animate-pulse"
-              style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+              className="h-16 rounded animate-pulse bg-sentinel-surface/50"
             />
           ))}
         </div>
       ) : data.length === 0 ? (
-        <div
-          className="text-center py-12"
-          style={{ color: 'var(--color-text-tertiary)' }}
-        >
+        <div className="text-center py-12 text-sentinel-text-muted">
           <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
           <p>취약점 보고서가 없습니다</p>
         </div>
@@ -68,61 +64,34 @@ export const RecentScansTable: React.FC<RecentScansTableProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr
-                className="border-b"
-                style={{ borderColor: 'var(--color-border)' }}
-              >
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
-                >
+              <tr className="border-b border-white/10">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
                   분석 정보
                 </th>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
-                >
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
                   위험도
                 </th>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
-                >
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
                   점수
                 </th>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
-                >
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
                   요약
                 </th>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white"
-                >
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white">
                   날짜
                 </th>
-                <th
-                  className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-white"
-                >
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-white">
                   상세보기
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+            <tbody className="divide-y divide-white/10">
               {data.map((scan) => (
                 <tr
                   key={scan.cve_id}
-                  className="transition-colors hover:bg-opacity-50"
-                  style={{
-                    '--hover-bg': 'var(--color-bg-tertiary)',
-                  } as React.CSSProperties}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
+                  className="transition-colors hover:bg-white/5"
                 >
-                  <td
-                    className="px-4 py-4 text-sm font-mono"
-                    style={{ color: 'var(--color-text-primary)' }}
-                  >
+                  <td className="px-4 py-4 text-sm font-mono text-sentinel-text-main">
                     {scan.cve_id}
                   </td>
                   <td className="px-4 py-4">
@@ -130,34 +99,20 @@ export const RecentScansTable: React.FC<RecentScansTableProps> = ({
                       {scan.risk_level}
                     </Badge>
                   </td>
-                  <td
-                    className="px-4 py-4 text-sm font-semibold"
-                    style={{ color: 'var(--color-text-secondary)' }}
-                  >
+                  <td className="px-4 py-4 text-sm font-semibold text-sentinel-text-muted">
                     {typeof scan.risk_score === 'number' ? scan.risk_score.toFixed(1) : 'N/A'}
                   </td>
-                  <td
-                    className="px-4 py-4 text-sm max-w-xs truncate"
-                    style={{ color: 'var(--color-text-secondary)' }}
-                  >
+                  <td className="px-4 py-4 text-sm max-w-xs truncate text-sentinel-text-muted">
                     {scan.analysis_summary || '요약 정보가 없습니다'}
                   </td>
-                  <td
-                    className="px-4 py-4 text-sm"
-                    style={{ color: 'var(--color-text-tertiary)' }}
-                  >
+                  <td className="px-4 py-4 text-sm text-sentinel-text-muted">
                     {formatDate(scan.created_at)}
                   </td>
                   <td className="px-4 py-4 text-center">
                     <Link
                       to={`/report/${scan.cve_id}`}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded
-                                 transition-all hover-lift"
-                      style={{
-                        backgroundColor: 'var(--color-bg-elevated)',
-                        color: 'var(--color-text-primary)',
-                        border: '1px solid var(--color-border)',
-                      }}
+                                 transition-all hover-lift bg-sentinel-surface border border-white/10 text-white hover:bg-sentinel-primary/20 hover:border-sentinel-primary/50"
                     >
                       보고서 보기
                       <ChevronRight className="w-3 h-3" />

@@ -10,7 +10,7 @@ interface CardProps {
 export const Card: React.FC<CardProps> = ({ children, className, title }) => {
   return (
     <div
-      className={clsx('card p-6', className)}
+      className={clsx('glass-panel p-6 rounded-2xl', className)}
     >
       {title && (
         <div className="mb-6">
