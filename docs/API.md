@@ -148,6 +148,8 @@ curl -H "X-API-Key: dev-api-key-123" http://localhost:8004/api/v1/query?package=
 - `package` (선택): 패키지 이름 (예: "lodash")
 - `cve_id` (선택): CVE 식별자 (예: "CVE-2023-1234")
 - `version` (선택): 패키지 버전 (예: "1.0.0"). 지정하지 않으면 기본값 "latest"
+- `ecosystem` (선택, 기본값: "npm"): 패키지 생태계. 지원: "npm", "pip", "apt"
+- `force` (선택, 기본값: false): 기존 분석 결과를 무시하고 강제 재분석
 
 **응답:**
 ```json
@@ -209,10 +211,15 @@ curl -H "X-API-Key: dev-api-key-123" http://localhost:8004/api/v1/query?package=
     "HIGH": 45,
     "MEDIUM": 120,
     "LOW": 60,
-    "Unknown": 10
+    "UNKNOWN": 10
   }
 }
 ```
+
+**참고:** 
+- `risk_distribution`의 모든 키는 대문자(UPPERCASE)입니다.
+- `ecosystem` 파라미터를 사용하여 npm, pip, apt 생태계별로 데이터가 격리됩니다.
+- `force=true`로 요청 시 기존 분석 결과를 삭제하고 재분석을 트리거합니다.
 
 ### 오류 응답
 모든 오류는 표준화된 JSON 봉투 형식을 따릅니다:
