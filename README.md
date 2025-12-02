@@ -1,11 +1,13 @@
-# npm 공급망 CVE/EPSS 대응 파이프라인
+# 멀티 에코시스템 공급망 CVE/EPSS 대응 파이프라인
 
-NPM 생태계 중심의 공급망 취약점을 자동 수집·분석하여 CVSS/EPSS 점수, 위협 인텔리전스, AI 권고안, 대시보드 및 API 응답까지 일괄 생성하는 프로토타입입니다. `MappingCollector → CVSS/EPSS Fetcher → ThreatAgent → Analyzer → QueryAPI/Web UI` 단계로 이어지는 에이전트 파이프라인을 포함합니다.
+npm, pip, apt 등 다양한 패키지 생태계의 공급망 취약점을 자동 수집·분석하여 CVSS/EPSS 점수, 위협 인텔리전스, AI 권고안, 대시보드 및 API 응답까지 일괄 생성하는 플랫폼입니다. `MappingCollector → CVSS/EPSS Fetcher → ThreatAgent → Analyzer → QueryAPI/Web UI` 단계로 이어지는 에이전트 파이프라인을 포함합니다.
 
 ## 주요 기능
+- **멀티 에코시스템 지원**: `npm`, `pip` (Python), `apt` (Debian/Ubuntu) 패키지 생태계 완벽 지원
 - **멀티 에이전트 오케스트레이션**: `AgentOrchestrator`가 캐시·DB·AI 호출을 묶어 단일 CLI/Worker에서 실행
 - **CVE 매핑 + 점수 수집**: Perplexity/NVD/FIRST.org를 통한 CVE, CVSS, EPSS 수집과 폴백 전략
 - **AI 기반 심층 분석**: Claude로 Markdown 리포트, GPT-5로 대응 가이드 생성 후 가중치 기반 `risk_score` 산출
+- **AI 할루시네이션 방어**: 4단계 검증 프로세스(System Prompt, Response Validation, Ensemble, Fact Checking)로 정확도 향상 (상세 보고서 포함)
 - **QueryAPI & Dashboard**: FastAPI + slowapi 인증/레이트리밋, React/Vite 대시보드, 자동 Request ID 주입
 - **작업 큐 & 폴백**: Redis `analysis_tasks` 큐, DB/캐시 비활성화 시에도 폴백 데이터로 파이프라인 지속
 - **문서/스크립트 세트**: `docs/`, `scripts/`, `demo/`에 환경 구성·헬스체크·검증 도구 포함
@@ -104,11 +106,14 @@ NPM 생태계 중심의 공급망 취약점을 자동 수집·분석하여 CVSS/
 ## 파이프라인 실행 방법
 ### 1. CLI 단일 실행 (`main.py`)
 ```bash
-python3 main.py --package lodash \
-  --version-range "<4.17.21>" \
-  --ecosystem npm \
-  --force \
-  --skip-threat-agent
+# npm 패키지 분석
+python3 main.py --package lodash --version-range "<4.17.21>" --ecosystem npm
+
+# Python 패키지 분석
+python3 main.py --package requests --version-range "<2.26.0" --ecosystem pip
+
+# System 패키지 분석
+python3 main.py --package openssl --version-range "1.1.1" --ecosystem apt
 ```
 옵션
 - `--ecosystem`: `npm` (기본) / `pip` / `apt`
@@ -126,8 +131,12 @@ python3 main.py --package lodash \
 ```bash
 uvicorn query_api.app.main:app --reload --port 8004
 ```
-- `X-API-Key` 헤더 필수 (`NT_QUERY_API_KEYS` 목록 중 하나)  
-- `/api/v1/query`, `/history`, `/stats`, `/health` 제공  
+- `X-API-Key` 헤더 필수 (`NT_QUERY_API_KEYS` 목록 중 하나)
+- **멀티 에코시스템 조회**:
+  ```bash
+  curl "http://localhost:8004/api/v1/query?package=django&ecosystem=pip"
+  ```
+- `/api/v1/query`, `/history`, `/stats`, `/health` 제공
 - slowapi로 `/query` 5회/분, `/history` 10회/분 rate limit
 
 ### 4. 웹 프론트엔드
@@ -140,6 +149,7 @@ npm run dev -- --host 0.0.0.0
 
 ### 5. Helper 스크립트
 - `run_pipeline.sh`: 의존성 설치 + CLI 실행
+- `reset.sh`: 전체 시스템 초기화 및 재시작 (DB 데이터 삭제 포함)
 - `demo/run_demo.sh`: `demo/sample_request.json`을 읽어 빠른 데모
 - `scripts/setup.sh`: Ubuntu 22.04 전용 종단 간 개발환경 설치
 - `scripts/health_check.py`, `scripts/verify_system.py`: 서비스 및 API 상태 확인
@@ -192,7 +202,7 @@ npm run dev -- --host 0.0.0.0
 ## 분석 작업 큐 & 자동 트리거
 - Redis 리스트 `analysis_tasks` 사용 (`worker.py`, `query_api/app/redis_ops.py`)
 - QueryAPI가 데이터 미존재 시 `submit_analysis_job`을 호출하여 패키지/버전/force 파라미터로 작업 푸시 → 워커가 `AgentOrchestrator`를 실행
-- `scripts/inject_task.py`로 수동 테스트 가능
+
 
 ## 테스트 / 진단 / 검증
 - `pytest tests/test_perplexity_parsers.py`
@@ -201,7 +211,7 @@ npm run dev -- --host 0.0.0.0
 - `python scripts/verify_system.py` : 전체 시스템 검증 루틴
 - `npm test` (web_frontend) – 필요 시 구성
 - GitHub Actions 등 외부 CI에선 `docker-compose` 조합 또는 `scripts/setup.sh` 활용 가능
-- 수동 검증은 `VERIFICATION_GUIDE.md` 참고 (API 키 인증, Stats 스키마, 워커 DLQ, 대시보드 시나리오 등 상세 단계 제공)
+
 
 ## 시스템 상태
 - 다중 에이전트 파이프라인, Redis 캐시, PostgreSQL 영속화, AI 폴백 전략, QueryAPI 인증·레이트리밋, React 대시보드, Request ID 미들웨어, JSONB 위협 사례 저장 등 **정상 동작**
@@ -218,7 +228,8 @@ npm run dev -- --host 0.0.0.0
 - `docs/ARCHITECTURE.md`: 전체 데이터 흐름, AI 역할, 최근 개선 사항
 - `docs/API.md`: 각 마이크로서비스 REST 명세 및 인증/레이트리밋 설명
 - `docs/DOCKER.md`: Docker 협업 환경 가이드
-- `docs/JSONB_FIX_EXPLANATION.md`: ThreatAgent JSONB 직렬화 이슈 분석
+- `docs/HALLUCINATION_DEFENSE_REPORT.md`: AI 할루시네이션 방어 전략 및 실험 결과 보고서
+
 - `manual_checklist.md`: 수동 점검 체크리스트
 
 ## 데이터베이스 접속 방법 (Database Access)
